@@ -161,6 +161,8 @@
         mine: own,
         holdsKey,
         canAsk: !own && !holdsKey,
+        // The hub knows this passkey's device, but the key is not on this page (a Home Screen app keeps its own storage): it asks again, approved by another phone.
+        rekey: own?.state === "active" && own.kind === "phone" && !newestKey() && others().some((d) => d.state === "active" && d.kind === "phone"),
         approverChanged: changed(own),
         confirmed: Boolean(pending && memo.get(`confirmed:${own.id}`)),
         // A new phone's code: the approver it pinned and its own key.
@@ -182,11 +184,11 @@
     }
 
     /** This phone asks a phone that has the key: a new key pair for this attempt, and its hash goes first. */
-    async function ask() {
+    async function ask({ rekey = false } = {}) {
       keys = { ...(await ownKeys()), device: E.newDeviceKeyPair() };
       await store.save(keys);
       memo.set("attempt", { key: b64(keys.device.publicKey), deviceId: null, accountId: state.accountId });
-      state = await api("POST", "/api/devices/commit", { commitment: E.keyCommitment(keys.device.publicKey, state.accountId) });
+      state = await api("POST", "/api/devices/commit", { commitment: E.keyCommitment(keys.device.publicKey, state.accountId), ...(rekey ? { rekey: true } : {}) });
       return view();
     }
 
@@ -336,6 +338,9 @@
     function render(view) {
       if (!view.on) return quiet();
       const own = view.mine;
+      if (view.rekey) {
+        return once("rekey", [title("Approve this device again"), h("p", {}, "Mobile here is signed in, but this device's key isn't here: an app on the Home Screen keeps its own storage, apart from Safari. Ask, then approve it in Mobile on another device."), row(h("button", { type: "button", onclick: closeSheet }, "Not now"), button("Ask for approval", () => enrollment.ask({ rekey: true }), { primary: true }))]);
+      }
       if (view.canAsk) {
         return once("ask", [title("Approve this device"), h("p", {}, "Mobile here needs approval from another device where you already use Mobile. Ask, then open Mobile there."), row(h("button", { type: "button", onclick: closeSheet }, "Not now"), button("Ask for approval", () => enrollment.ask(), { primary: true }))]);
       }
@@ -487,6 +492,7 @@
   /** The Fleet's line when no overlord shows because a computer is not approved yet (a required account takes nothing from it): what is left and where, so a tester does not read it as a failed pairing. feed: GET /api/feed; view: this phone's enrollment view, or null on the desktop. Null when no computer waits. */
   function fleetNote(feed, view = null) {
     if (feed?.encryption?.state !== "required") return null;
+    if (view?.rekey) return { text: "This device's key isn't here, so nothing sealed can show: approve this device again from Mobile on another device.", phone: true };
     const keyless = (feed.workshops || []).filter((w) => w.holdsKey === false);
     // Devices carry no workshop id, only its name: the computer mid-request first, then one that is online.
     const requested = (w) => (view?.waiting || []).find((d) => d.kind === "workshop" && d.name === w.name);
