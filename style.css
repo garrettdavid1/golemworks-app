@@ -233,6 +233,13 @@ h3.subgroup { margin: 10px 2px 0; font-size: 12px; font-weight: 700; text-transf
 .usage-shop { padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); }
 .usage-shop-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; font-size: 14px; }
 .usage-heard { font-size: 12px; color: var(--muted); text-align: right; }
+.usage-account { margin-bottom: 10px; }
+.usage-account-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.usage-machine { padding-top: 10px; border-top: 1px solid var(--border); }
+/* Settings > Accounts is the hub account, so the words "Claude account" show on a tap and are always read aloud. */
+.account-tag { display: inline-block; padding: 0 6px; line-height: 14px; border: 1px dotted var(--border); border-radius: 999px; cursor: help; }
+.account-tag[data-open] { color: var(--text); border-style: solid; }
+.account-tag:not([data-open]) .account-said { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .usage-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
 .usage-bar { --fill: var(--accent); display: grid; gap: 3px; min-width: 0; }
 .usage-bar[data-level="amber"] { --fill: var(--stale); }

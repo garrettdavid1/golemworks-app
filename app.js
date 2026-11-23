@@ -109,6 +109,9 @@
     return node;
   }
 
+  // public/claude-account.js
+  const metaLine = (parts, account) => ClaudeAccount.meta(h, parts, account);
+
   // Sealed records from keyed workshops (public/sealed.js): opened here with this device's keys, never by the hub.
   const sealed = typeof GolemworksSealed !== "undefined" && typeof GolemworksE2E !== "undefined" ? GolemworksSealed.create({ E: GolemworksE2E, loadKeys: () => GolemworksE2E.phoneKeyStore().load(), storage: localStorage }) : null;
   const opened = (what, ...args) => (sealed ? sealed[what](...args) : args.at(-1));
@@ -1173,7 +1176,7 @@
         s.onYou ? h("span", { class: "chip-tag on-you" }, "waits on you") : null,
         s.since ? h("span", { class: "standby-since" }, `◷ ${ago(s.since).replace(" ago", "")}`) : null,
       ]),
-      h("div", { class: "card-meta" }, [g.workshop, g.workspace, g.flow].filter(Boolean).join(" · ")),
+      h("div", { class: "card-meta" }, metaLine([g.workshop, g.workspace, g.flow], g.account)),
       h("div", { class: "standby-ask" }, s.on || g.status || "No reason given"),
     ]);
   }
@@ -1203,7 +1206,7 @@
         const outcome = [["Purpose", c.purpose], ["Did", c.did], ["Result", c.result]].filter(([, text]) => text);
         return h("article", { class: "card completed-card", "data-state": state }, [
           h("div", { class: "card-top" }, [h("span", { class: "card-name" }, c.label || c.name), h("span", { class: "pill", "data-state": state }, [h("span", { class: "dot", "data-state": state }), c.endState === "closed" ? "Closed" : state === "blocked" ? "Ended blocked" : STATE_LABEL[state]])]),
-          h("div", { class: "card-meta" }, [c.workshop, c.workspace, c.flow, `ended ${dayHeading(c.endedAt) === "Today" ? clockTime(c.endedAt) : `${dayHeading(c.endedAt)} ${clockTime(c.endedAt)}`}`, c.startedAt ? span(c.startedAt, c.endedAt) : ""].filter(Boolean).join(" · ")),
+          h("div", { class: "card-meta" }, metaLine([c.workshop, c.workspace, c.flow, `ended ${dayHeading(c.endedAt) === "Today" ? clockTime(c.endedAt) : `${dayHeading(c.endedAt)} ${clockTime(c.endedAt)}`}`, c.startedAt ? span(c.startedAt, c.endedAt) : ""], c.account)),
           outcome.length ? h("dl", { class: "completed-outcome" }, outcome.flatMap(([term, text]) => [h("dt", {}, term), h("dd", {}, linked(text))])) : null,
         ]);
       }),
@@ -1230,14 +1233,24 @@
     // A workshop offline or not updating: its bars as last heard, gray.
     const old = w.online === false || Boolean(w.stale);
     const gray = old || u.stale;
-    const bars = [
-      usageBar("Weekly", u.weekly, gray, u.weekly && !u.weekly.none && u.weekly.resetsAt ? `resets ${resetDay(u.weekly.resetsAt)}` : "", u.loading),
-      u.fiveHour !== undefined ? usageBar("5-hour", u.fiveHour, gray, u.fiveHour?.none ? "No 5-hour limit on this plan right now" : u.fiveHour?.resetsAt ? `resets ${clockTime(u.fiveHour.resetsAt)}` : "no window open", u.loading) : null,
+    const plan = (p, grayed) => [
+      usageBar("Weekly", p.weekly, grayed, p.weekly && !p.weekly.none && p.weekly.resetsAt ? `resets ${resetDay(p.weekly.resetsAt)}` : "", u.loading),
+      p.fiveHour !== undefined ? usageBar("5-hour", p.fiveHour, grayed, p.fiveHour?.none ? "No 5-hour limit on this plan right now" : p.fiveHour?.resetsAt ? `resets ${clockTime(p.fiveHour.resetsAt)}` : "no window open", u.loading) : null,
+    ];
+    const machine = [
       usageBar("Disk", u.disk, old || u.disk?.stale, u.disk ? `${u.disk.freeGb.toFixed(1)} GB free` : ""),
       usageBar("Memory", u.memory, old || u.memory?.stale, u.memory?.totalGb ? `${((u.memory.percent / 100) * u.memory.totalGb).toFixed(1)} of ${u.memory.totalGb.toFixed(1)} GB used` : ""),
     ];
     const heard = old ? `${w.online === false ? "offline" : "not updating"}; as of ${ago(w.receivedAt)}` : u.stale ? `stale${u.updatedAt ? `, ${ago(u.updatedAt)}` : ""}${u.error ? `: ${u.error}` : ""}` : u.updatedAt ? `updated ${clockTime(u.updatedAt)}` : "";
-    return h("section", { class: "usage-shop", "aria-label": `${w.name} usage` }, [h("div", { class: "usage-shop-head" }, [h("strong", {}, w.name), h("span", { class: "usage-heard" }, heard)]), h("div", { class: "usage-bars" }, bars)]);
+    const head = h("div", { class: "usage-shop-head" }, [h("strong", {}, w.name), h("span", { class: "usage-heard" }, heard)]);
+    // Disk and memory belong to the computer, so they show once under the accounts.
+    const accounts = ClaudeAccount.groups(u);
+    if (!accounts) return h("section", { class: "usage-shop", "aria-label": `${w.name} usage` }, [head, h("div", { class: "usage-bars" }, [...plan(u, gray), ...machine])]);
+    return h("section", { class: "usage-shop", "aria-label": `${w.name} usage` }, [
+      head,
+      ...accounts.map((a) => h("div", { class: "usage-account", role: "group", "aria-label": `${w.name} usage, ${ClaudeAccount.label(a.account)}` }, [h("div", { class: "usage-account-head" }, [h("span", {}, [w.name, " · ", ClaudeAccount.tag(h, a.account)]), a.stale && !gray ? h("span", { class: "usage-heard" }, "stale") : null]), h("div", { class: "usage-bars" }, plan(a, gray || a.stale))])),
+      h("div", { class: "usage-bars usage-machine" }, machine),
+    ]);
   }
 
   /** One bar: percent and fill (gray when stale), the pace mark, a note; no number is an empty dashed track with "–", never 0%. */
@@ -1275,9 +1288,9 @@
   function needCard(g, asks, paused = null, updateFailed = null) {
     const gate = !paused && !updateFailed && asks.every((a) => a.kind === "gate");
     const node = h("article", { class: `card need attention${gate ? " gate" : ""}${g.type === "overlord" ? " overlord orchestrator" : ""}`, "data-state": gate || (paused && !updateFailed && !asks.length) ? "waiting" : "blocked", "data-pane": g.name }, [
-      h("button", { type: "button", class: "card-open", "aria-label": `Open ${g.label || g.name}`, onclick: () => openGolem(g) }, [
+      h("button", { type: "button", class: "card-open", "aria-label": `Open ${g.label || g.name}${ClaudeAccount.name(g.account) ? `, ${ClaudeAccount.label(ClaudeAccount.name(g.account))}` : ""}`, onclick: () => openGolem(g) }, [
         h("div", { class: "card-top" }, [h("span", { class: "card-name" }, g.label || g.name), g.type === "overlord" ? h("span", { class: "tag" }, "Overlord") : null, pill(g.state, g)]),
-        h("div", { class: "card-meta" }, [g.workshop, g.workspace, g.flow].filter(Boolean).join(" · ")),
+        h("div", { class: "card-meta" }, metaLine([g.workshop, g.workspace, g.flow], g.account)),
         stepsOf(g),
       ]),
       ...(paused ? [pausedItem(paused)] : []),
@@ -1363,7 +1376,7 @@
       onclick: () => openGolem(g),
     }, [
       h("div", { class: "card-top" }, [h("span", { class: "card-name" }, g.label || g.name), g.type === "overlord" ? h("span", { class: "tag" }, "Overlord") : null, pill(state, g)]),
-      h("div", { class: "card-meta" }, [g.workshop, g.workspace, g.flow].filter(Boolean).join(" · ")),
+      h("div", { class: "card-meta" }, metaLine([g.workshop, g.workspace, g.flow], g.account)),
       stepsOf(g),
       waitLine(g) ? h("div", { class: "card-status" }, waitLine(g)) : need ? h("div", { class: need.david ? "card-attention" : "card-status" }, need.text) : cardLine(g) ? h("div", { class: "card-status" }, cardLine(g)) : null,
     ]);
@@ -1785,7 +1798,7 @@
       h("div", { class: "sheet-head" }, [
         h("div", { class: "sheet-grip", "aria-hidden": "true" }),
         h("div", { class: "row" }, [
-          h("div", { class: "grow" }, [h("h2", { id: "sheet-title" }, g.label || g.name), h("div", { class: "card-meta" }, [g.workshop, g.workspace, g.flow].filter(Boolean).join(" · "))]),
+          h("div", { class: "grow" }, [h("h2", { id: "sheet-title" }, g.label || g.name), h("div", { class: "card-meta" }, metaLine([g.workshop, g.workspace, g.flow], g.account))]),
           pill(g.state, g),
           parts.chat ? h("button", { type: "button", class: "sheet-close sheet-x", "aria-label": "Close", onclick: closeSheet }, "✕") : null,
         ]),
