@@ -1,0 +1,36 @@
+/* The desktop golems (vendor/golemworks/golems.css, copied from Golemworks) fitted to the phone, and the desktop's art. */
+
+/* The desktop sets its light stone colors only for a chosen light theme; the phone also follows the system's. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) { --stone: #4f67b0; --stone-l: #6880c8; --stone-d: #3a4f8c; --rock: #8a93a8; --crack: rgb(10 20 50 / 0.3); --wood: #9a7449; --metal: #7d88a3; --crystal-hi: #5cc493; }
+}
+
+/* Cards: the golem on the left, the card's rows beside it. */
+.card.has-golem { padding: 8px 10px 8px 6px; }
+.card.has-golem .golem-avatar { width: 56px; height: 48px; }
+.card.orchestrator.has-golem .golem-avatar { width: 66px; height: 57px; }
+.card-main { gap: 6px; }
+.step-bar { gap: 3px; }
+.step { flex: 1 1 0; }
+
+/* A tall needs-you card keeps its golem at the top, beside its name. */
+.card.need.has-golem { align-items: flex-start; }
+
+/* An ask on its own (a sheet, a golem the feed does not list) carries its golem waving for attention. */
+.item.has-golem { flex-direction: row; align-items: flex-start; gap: 10px; }
+.item.has-golem .golem-avatar { width: 48px; height: 42px; margin-top: 2px; }
+.item.has-golem .card-main { gap: 6px; }
+
+/* Art from the desktop: pebbles under the header, a crystal cluster on empty screens, a rock ledge at sign-in in a box of the art's own shape (640 by 207), so its crystals are never cut. */
+.top::after { content: ""; position: absolute; right: 14px; bottom: -1px; width: 110px; height: 18px; background: url("/vendor/golemworks/art/pebbles.webp") right bottom / contain no-repeat; pointer-events: none; }
+.empty::before { content: ""; display: block; width: 96px; height: 112px; margin: 0 auto 12px; background: url("/vendor/golemworks/art/crystal-cluster.webp") center / contain no-repeat; filter: drop-shadow(0 6px 18px var(--accent-glow)); }
+.signin::after { content: ""; display: block; width: min(320px, 90vw); aspect-ratio: 640 / 207; margin-top: 18px; background: url("/vendor/golemworks/art/rock-ledge.webp") center bottom / contain no-repeat; pointer-events: none; }
+.loading-shard { display: block; width: 30px; height: 50px; margin: 64px auto; background: url("/vendor/golemworks/art/crystal-shard.webp") center / contain no-repeat; animation: shard-glow 1.6s ease-in-out infinite; }
+@keyframes shard-glow { 50% { opacity: 0.45; filter: drop-shadow(0 0 10px var(--accent)); } }
+.panel.with-corner { position: relative; }
+.panel.with-corner::after { content: ""; position: absolute; right: 8px; bottom: -4px; width: 46px; height: 38px; background: url("/vendor/golemworks/art/rock-corner.webp") right bottom / contain no-repeat; pointer-events: none; opacity: 0.9; }
+@media (prefers-reduced-motion: reduce) { .loading-shard { animation: none; } }
+body.motion-hold .loading-shard { animation-play-state: paused; }
+
+/* The desktop's Merged today cluster on the Orchestrator's card: the hub has no merge data, so the phone leaves it out. */
+.golem-merged { display: none; }

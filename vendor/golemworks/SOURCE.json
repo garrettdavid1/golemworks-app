@@ -1,0 +1,18 @@
+{
+  "commit": "36e651f9ec8c71ba4d03a4170e2a618722ed8931",
+  "branch": "main",
+  "copiedAt": "2026-11-16T21:52:34.011Z",
+  "files": [
+    "src/ui/golems.js",
+    "src/ui/golems.css",
+    "src/shared/merged-today.js",
+    "src/shared/golem-path.js",
+    "src/shared/golem-art/golem-art.js",
+    "src/shared/golem-art/golem-art.css",
+    "assets/art/crystal-cluster.webp",
+    "assets/art/crystal-shard.webp",
+    "assets/art/pebbles.webp",
+    "assets/art/rock-corner.webp",
+    "assets/art/rock-ledge.webp"
+  ]
+}

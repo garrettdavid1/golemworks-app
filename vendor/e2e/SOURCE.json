@@ -1,0 +1,12 @@
+{
+  "commit": "3c2ba9dd9848b83d0ede2f31542ff14294e5f20b",
+  "branch": "tb-e6-device-rotation",
+  "copiedAt": "2026-11-18T23:15:32.698Z",
+  "libsodium": "0.8.4",
+  "libsodiumWrappers": "0.8.4",
+  "scripts": [
+    "libsodium.js",
+    "libsodium-wrappers.js",
+    "e2e.js"
+  ]
+}

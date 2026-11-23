@@ -1,0 +1,560 @@
+/* Golemworks Mobile. Colors are the desktop app's tokens (src/ui/style.css in golemworks), both themes. */
+@font-face { font-family: "Karla"; src: url("/fonts/karla-latin.woff2") format("woff2"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: "Bricolage Grotesque"; src: url("/fonts/bricolage-grotesque-latin.woff2") format("woff2"); font-weight: 200 800; font-display: swap; }
+
+:root {
+  color-scheme: dark;
+  --bg: #0a0f1e;
+  --panel: #0f1730;
+  --panel-raised: #172246;
+  --border: #233260;
+  --text: #e2e8f5;
+  --muted: #93a0bf;
+  --accent: #4cd794;
+  --accent-text: #04170d;
+  --accent-glow: rgb(76 215 148 / 0.35);
+  --working: #5aa6ff;
+  --idle: #8a97b3;
+  --blocked: #ff6b5e;
+  --blocked-text: #1a0705;
+  --done: #a6d65a;
+  --stale: #f0b44c;
+  --exited: #8590aa;
+  --unknown: #b48ef0;
+  --waiting: #4fc1c1;
+  --queued: #e39b5b;
+  --bubble-me: color-mix(in srgb, var(--accent) 22%, var(--panel));
+  --backdrop: rgb(3 6 16 / 0.6);
+  --font: "Karla", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --display: "Bricolage Grotesque", "Karla", -apple-system, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #eef1f8; --panel: #ffffff; --panel-raised: #e6eaf5; --border: #c9d1e4; --text: #0e1836; --muted: #4a5675;
+    --accent: #0a7346; --accent-text: #ffffff; --accent-glow: rgb(10 115 70 / 0.22); --working: #1f5fd1; --idle: #5c6884;
+    --blocked: #bb3329; --blocked-text: #ffffff; --done: #437011; --stale: #a76a00; --exited: #5d677e; --unknown: #7146c4;
+    --waiting: #0d7777; --queued: #9a5310; --backdrop: rgb(14 24 54 / 0.35);
+    --bubble-me: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bubble-me: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  --bg: #eef1f8; --panel: #ffffff; --panel-raised: #e6eaf5; --border: #c9d1e4; --text: #0e1836; --muted: #4a5675;
+  --accent: #0a7346; --accent-text: #ffffff; --accent-glow: rgb(10 115 70 / 0.22); --working: #1f5fd1; --idle: #5c6884;
+  --blocked: #bb3329; --blocked-text: #ffffff; --done: #437011; --stale: #a76a00; --exited: #5d677e; --unknown: #7146c4;
+  --waiting: #0d7777; --queued: #9a5310; --backdrop: rgb(14 24 54 / 0.35);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+/* html and body share the tab bar's color, so any edge iOS leaves past the frame matches the bar beside it. */
+html, body { margin: 0; background: var(--panel); color: var(--text); font-family: var(--font); font-size: 16px; -webkit-text-size-adjust: 100%; }
+/* The page itself never scrolls: in an iOS Home Screen app a scrolling page carries fixed bars with it. Only main scrolls. */
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button {
+  background: var(--panel-raised); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; min-height: 44px;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 700; }
+button.danger { color: var(--blocked); }
+button.small { min-height: 36px; padding: 6px 12px; font-size: 14px; }
+button:disabled { opacity: 0.5; }
+select { background: var(--panel-raised); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; min-height: 40px; max-width: 100%; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.muted { color: var(--muted); }
+
+/* frame: a screen-high column of header, scrolling main, tab bar */
+/* The layout viewport, not 100dvh; --frame-short (frame.js) is how far short of the screen a Home Screen app's page ends. */
+#app { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
+/* Opaque, and nothing scrolls under it, so the status bar clock never sits on a card. */
+.top {
+  position: relative; flex: none; z-index: 5; display: flex; align-items: center; gap: 10px;
+  padding: calc(env(safe-area-inset-top) + 10px) 16px 10px; background: var(--bg); border-bottom: 1px solid var(--border);
+}
+.brand-mark { width: 28px; height: 28px; border-radius: 7px; filter: drop-shadow(0 0 6px var(--accent-glow)); }
+.top h1 { flex: 1; margin: 0; font-family: var(--display); font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.conn { font-size: 12px; color: var(--muted); }
+.conn[data-state="error"] { color: var(--stale); }
+main { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; padding: 12px 16px 24px; outline: none; }
+/* The desktop app's Settings > Account: its own section header stands in for this one; a readable column. */
+[data-surface="desktop"] .top { display: none; }
+[data-surface="desktop"] main { width: 100%; max-width: 760px; margin: 0 auto; }
+main:has(+ .tabs[hidden]) { padding-bottom: max(24px, calc(env(safe-area-inset-bottom) + 24px - var(--frame-short, 0px))); }
+.tabs {
+  flex: none; z-index: 5; display: grid; grid-template-columns: repeat(5, 1fr);
+  padding: 6px 8px max(6px, calc(env(safe-area-inset-bottom) + 6px - var(--frame-short, 0px))); background: var(--panel); border-top: 1px solid var(--border);
+}
+.tabs a {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 48px; justify-content: center;
+  color: var(--muted); text-decoration: none; font-size: 12px; font-weight: 600; border-radius: 10px; -webkit-tap-highlight-color: transparent;
+}
+.tabs a[aria-current="page"] { color: var(--accent); }
+.tab-icon { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tabs a[aria-current="page"] .tab-icon { filter: drop-shadow(0 0 5px var(--accent-glow)); }.badge { position: absolute; top: 2px; left: calc(50% + 8px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--blocked); color: var(--blocked-text); font-size: 11px; font-weight: 800; line-height: 18px; text-align: center; }
+
+/* shared blocks */
+h2.group { display: flex; align-items: baseline; gap: 8px; margin: 18px 2px 8px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+h2.group:first-child { margin-top: 4px; }
+h2.group .where { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.empty { margin: 48px 12px; text-align: center; color: var(--muted); }
+.empty strong { display: block; margin-bottom: 4px; color: var(--text); font-family: var(--display); font-size: 18px; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.stack { display: flex; flex-direction: column; gap: 10px; }
+.row { display: flex; align-items: center; gap: 10px; }
+.row > .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.note { font-size: 13px; color: var(--muted); }
+.encryption-state { margin: 0; }
+/* The banner while anything is unencrypted (public/encryption-guide.js), between the header and the screen. */
+.encryption-banner { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 16px; background: color-mix(in srgb, var(--stale) 14%, var(--panel)); border-bottom: 1px solid color-mix(in srgb, var(--stale) 45%, var(--border)); }
+.encryption-banner[hidden] { display: none; }
+.encryption-banner .grow { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.encryption-banner strong { font-size: 15px; }
+.encryption-banner .row { flex: none; }
+.encryption-steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.encryption-steps li[data-step="done"] { color: var(--muted); }
+.encryption-steps li[data-step="current"] { font-weight: 600; }
+.encryption-steps .step-mark { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 700; border: 1px solid currentColor; }
+.encryption-steps li[data-step="done"] .step-mark { color: var(--accent); }
+.encryption-steps li[data-step="current"] .step-mark { border-color: var(--stale); }
+.encryption-steps li button { display: block; margin-top: 6px; }
+
+/* inbox */
+.item { display: flex; flex-direction: column; gap: 6px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.item.ask { border-color: var(--blocked); border-left: 4px solid var(--blocked); }
+.item-head { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.item-head .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 700; }
+.item-text { font-size: 16px; line-height: 1.35; overflow-wrap: anywhere; }
+.item-context { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.item-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.option { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--muted); }
+.item-foot { font-size: 12px; color: var(--muted); }
+.item a, .sheet a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+/* answering: options to pick, a reply box, one Send */
+.answer { display: flex; flex-direction: column; gap: 8px; }
+.option.pick { min-height: 40px; padding: 8px 14px; border-radius: 999px; font-size: 15px; color: var(--text); background: var(--panel-raised); }
+/* a question's context (public/ask-context.js): what it is about, each option's does and cost, the recommended one */
+.ask-about { margin: 0; font-size: 14px; line-height: 1.4; color: var(--text); overflow-wrap: anywhere; }
+.ask-about.clamped { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.ask-about-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.ask-about-more { min-height: 32px; padding: 2px 10px; font-size: 13px; color: var(--accent); background: none; border-color: transparent; }
+.option.pick.has-context { flex: 1 1 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; border-radius: 12px; text-align: left; }
+.option.pick.recommended { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.option-label { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.rec-chip { padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; background: var(--accent); color: var(--accent-text); }
+.option-does { font-size: 13px; font-weight: 400; color: var(--text); }
+.option-cost { font-size: 12px; font-weight: 400; color: var(--muted); }
+.ask-why { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.ask-bare { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; font-size: 13px; color: var(--muted); }
+.option.pick[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--panel-raised)); box-shadow: 0 0 0 1px var(--accent); font-weight: 700; }
+.answer textarea { width: 100%; box-sizing: border-box; min-height: 44px; resize: vertical; padding: 10px 12px; font-size: 16px; line-height: 1.35; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 10px; }
+.answer textarea::placeholder { color: var(--muted); }
+.answer textarea:disabled { opacity: 0.5; }
+.answer-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.answer-foot .item-foot { flex: 1; min-width: 0; }
+.answer-foot > button:only-child { margin-left: auto; }
+.kind { padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+.kind.ask { background: var(--blocked); color: var(--blocked-text); }
+/* a gate or a pause waits on a yes, not on trouble */
+.kind.ask.gate { background: var(--queued); color: var(--bg); }
+.item.ask[data-state="waiting"] { border-color: var(--queued); }
+.item-detail { margin: 0; padding: 8px 10px; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 8px; font-family: var(--mono); font-size: 12px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+.item-detail.clipped { max-height: 7.2em; overflow: hidden; mask-image: linear-gradient(#000 70%, transparent); -webkit-mask-image: linear-gradient(#000 70%, transparent); }
+.detail-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.item-does { font-size: 13px; color: var(--muted); }
+.item-why { font-size: 13px; color: var(--queued); }
+.quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.kind.done { color: var(--done); border: 1px solid currentColor; }
+.kind.cleared { color: var(--waiting); border: 1px solid currentColor; }
+
+/* fleet */
+.filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+.filters label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); font-weight: 600; min-width: 0; }
+.cards { display: flex; flex-direction: column; gap: 10px; }
+.card {
+  display: flex; flex-direction: column; gap: 6px; width: 100%; text-align: left; padding: 10px 12px; min-height: 0;
+  border-radius: 10px; background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--state, var(--border));
+}
+.card.overlord { border-left-width: 4px; border-color: var(--accent); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, var(--panel)), var(--panel) 60%); }
+.card.attention { border-color: var(--blocked); box-shadow: 0 0 0 1px var(--blocked) inset; }
+.card-top { display: flex; align-items: center; gap: 8px; }
+.card-name { flex: 1; min-width: 0; font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-meta { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-status { font-family: var(--mono); font-size: 12px; line-height: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-attention { color: var(--blocked); font-weight: 700; font-size: 13px; overflow-wrap: anywhere; }
+/* A golem needing you: the top opens its sheet, its asks and their controls sit under it. */
+.card.need { gap: 8px; }
+.card.need.gate { border-color: var(--queued); box-shadow: 0 0 0 1px var(--queued) inset; }
+.card-open { display: flex; flex-direction: column; gap: 6px; width: 100%; min-height: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
+.card.need .item.ask { padding: 8px 0 0; background: transparent; border: 0; border-top: 1px solid var(--border); border-radius: 0; }
+.card.need .item-head .who { display: none; }
+.card.need .item-head > span:last-child { margin-left: auto; }
+.card.focused { outline: 2px solid var(--accent); outline-offset: 2px; }
+h2.group.needs { color: var(--blocked); }
+/* The desktop Board's views on Fleet: a switch, a counts line, watchers, Standby rows and Completed cards. */
+.view-switch { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 3px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); }
+.view-switch button { min-height: 40px; border: none; border-radius: 9px; background: none; color: var(--muted); font: inherit; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.view-switch button[aria-selected="true"] { background: var(--panel-raised); color: var(--text); font-weight: 700; }
+.view-count { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.board-summary { margin: 2px 2px 0; font-size: 13px; color: var(--muted); }
+.board-summary strong { color: var(--text); }
+.standby-chip { align-self: flex-start; min-height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel); color: var(--waiting); font: inherit; font-size: 13px; }
+h3.subgroup { margin: 10px 2px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.watcher-list { display: flex; flex-direction: column; gap: 6px; }
+.watcher-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr); grid-template-areas: "dot name status" ". when when"; align-items: baseline; gap: 2px 8px; width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text); font: inherit; font-size: 14px; text-align: left; }
+.watcher-row .dot { grid-area: dot; align-self: center; }
+.watcher-name { grid-area: name; font-weight: 700; }
+.watcher-status { grid-area: status; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.watcher-when { grid-area: when; font-size: 12px; color: var(--muted); }
+.watcher-row[data-health="stale"] { border-color: var(--stale); }
+.standby-row { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text); font: inherit; text-align: left; }
+.standby-row.on-you { border-color: var(--stale); }
+.standby-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.standby-title { font-weight: 700; margin-right: auto; }
+.standby-since { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.standby-ask { font-size: 14px; overflow-wrap: anywhere; }
+.chip-tag { padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; font-size: 11px; color: var(--muted); }
+.chip-tag.on-you { color: var(--stale); border-color: var(--stale); }
+.completed-outcome { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; margin: 6px 0 0; font-size: 14px; }
+.completed-outcome dt { color: var(--muted); }
+.completed-outcome dd { margin: 0; overflow-wrap: anywhere; }
+/* Each workshop's usage bars, as the desktop's sidebar draws them. */
+.usage-shops { display: flex; flex-direction: column; gap: 10px; }
+.usage-shop { padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); }
+.usage-shop-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; font-size: 14px; }
+.usage-heard { font-size: 12px; color: var(--muted); text-align: right; }
+.usage-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.usage-bar { --fill: var(--accent); display: grid; gap: 3px; min-width: 0; }
+.usage-bar[data-level="amber"] { --fill: var(--stale); }
+.usage-bar[data-level="red"] { --fill: var(--blocked); }
+.usage-bar[data-level="gray"] { --fill: var(--idle); }
+.usage-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; }
+.usage-label { color: var(--muted); }
+.usage-pct { font-variant-numeric: tabular-nums; font-weight: 700; }
+.usage-bar[data-level="gray"] .usage-pct { color: var(--muted); }
+.usage-track { position: relative; height: 6px; border-radius: 999px; background: var(--panel-raised); border: 1px solid var(--border); overflow: hidden; }
+.usage-bar[data-empty] .usage-track { border-style: dashed; background: transparent; }
+.usage-fill { position: absolute; inset: 0 auto 0 0; background: var(--fill); border-radius: inherit; }
+.usage-pace { position: absolute; top: -1px; bottom: -1px; width: 2px; margin-left: -1px; background: var(--text); opacity: 0.8; }
+.usage-note { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+/* What a tapped push was about: its border lights up, then fades. */
+.flash { animation: flash 2.4s ease-out; outline: 3px solid transparent; outline-offset: 4px; }
+.thread.flash { border-radius: 10px; }
+@keyframes flash { 0%, 35% { outline-color: var(--accent); } 100% { outline-color: transparent; } }
+@media (prefers-reduced-motion: reduce) { .flash { animation-duration: 3s; animation-timing-function: steps(1, end); } }
+/* Attachments David sent, under his message: a tap opens the copy this phone kept. */
+.attached.sent { margin: 4px 0 0; }
+.chip.sent-file { font: inherit; color: inherit; cursor: pointer; }
+.chip.sent-file:disabled { cursor: default; opacity: 0.7; }
+.viewer { position: absolute; inset: 0; z-index: 35; display: flex; flex-direction: column; background: rgb(0 0 0 / 0.92); }
+.viewer img { flex: 1; min-height: 0; width: 100%; object-fit: contain; padding-top: env(safe-area-inset-top); }
+.viewer-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px max(16px, calc(env(safe-area-inset-bottom) + 16px - var(--frame-short, 0px))); color: #fff; }
+.viewer-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.done-group > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 6px; margin: 18px 2px 8px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.done-group > summary::-webkit-details-marker { display: none; }
+.done-group > summary::before { content: "▸"; }
+.done-group[open] > summary::before { content: "▾"; }
+.tag { padding: 0 6px; border-radius: 999px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; background: var(--accent); color: var(--accent-text); }
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; border: 1px solid currentColor; white-space: nowrap; }
+.dot { width: 7px; height: 7px; border-radius: 50%; }
+[data-state="working"] { --state: var(--working); }
+[data-state="idle"] { --state: var(--idle); }
+[data-state="blocked"] { --state: var(--blocked); }
+[data-state="done"] { --state: var(--done); }
+[data-state="waiting"] { --state: var(--waiting); }
+[data-state="queued"] { --state: var(--queued); }
+[data-state="listening"] { --state: var(--idle); }
+[data-state="exited"], [data-state="parked"] { --state: var(--exited); }
+[data-state="resuming"], [data-state="unknown"] { --state: var(--unknown); }
+.pill[data-state] { color: var(--state); }
+.dot[data-state] { background: var(--state); }
+.dot[data-state="working"] { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .dot[data-state="working"], .step[data-state="current"] { animation: none; } }
+.step-bar { display: flex; gap: 3px; }
+.step { flex: 1 1 0; height: 7px; border-radius: 2px; background: var(--border); }
+.step[data-state="done"] { background: var(--done); }
+.step[data-state="current"] { background: var(--working); animation: pulse 1.2s ease-in-out infinite; }
+.card[data-state="blocked"] .step[data-state="current"], .card.attention .step[data-state="current"] { background: var(--blocked); animation: none; }
+.step-label { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step-label .n { color: var(--muted); }
+
+/* sheet (card detail) */
+.sheet { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; justify-content: flex-end; background: var(--backdrop); }
+.sheet[hidden] { display: none; }
+.sheet-body { max-height: 85%; overflow: auto; overscroll-behavior: contain; transition: transform 0.2s ease-out, max-height 0.2s ease-out; background: var(--panel); border-top: 1px solid var(--border); border-radius: 16px 16px 0 0; padding: 14px 16px max(18px, calc(env(safe-area-inset-bottom) + 18px - var(--frame-short, 0px))); }
+/* The handle and header start a drag: the browser never takes that gesture for scrolling. */
+.sheet-head { touch-action: none; cursor: grab; margin: -14px -16px 0; padding: 14px 16px 2px; }
+.sheet-grip { width: 40px; height: 5px; margin: 0 auto 10px; border-radius: 3px; background: var(--border); }
+.sheet-body.expanded { max-height: calc(100% - env(safe-area-inset-top) - 8px); min-height: calc(100% - env(safe-area-inset-top) - 8px); }
+.sheet-body.dragging { transition: none; }
+@media (prefers-reduced-motion: reduce) { .sheet-body { transition: none; } }
+.sheet h2 { margin: 0 0 2px; font-family: var(--display); font-size: 20px; }
+.sheet h3 { margin: 16px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.step-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.step-list li { display: flex; gap: 8px; align-items: baseline; font-size: 14px; }
+.step-list .mark { flex: none; width: 18px; text-align: center; font-weight: 800; }
+.step-list li[data-state="done"] .mark { color: var(--done); }
+.step-list li[data-state="current"] { font-weight: 700; }
+.step-list li[data-state="current"] .mark { color: var(--working); }
+.step-list li[data-state="pending"] { color: var(--muted); }
+.history { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.history li { font-size: 13px; }
+.history time { display: block; font-size: 11px; color: var(--muted); }
+.history .status { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.history .flips { font-size: 12px; color: var(--muted); }
+.history-days .day { margin: 12px 0 6px; font-size: 12px; font-weight: 700; }
+.history-days .day:first-child { margin-top: 0; }
+.history-days .more { margin-top: 10px; min-height: 36px; padding: 6px 12px; font-size: 14px; }
+.history.said { margin-top: 10px; gap: 12px; }
+.history.said .status { font-family: var(--font); font-size: 14px; white-space: pre-wrap; }
+/* folded away on a sheet: what overlords said to each other, and the status flips */
+.sheet details.between, .sheet details.status-history { margin-top: 16px; }
+.sheet details.between > summary, .sheet details.status-history > summary { list-style: none; cursor: pointer; display: flex; gap: 6px; min-height: 36px; align-items: center; font-size: 13px; color: var(--muted); }
+.sheet details.between > summary { text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+.sheet details.between > summary::-webkit-details-marker, .sheet details.status-history > summary::-webkit-details-marker { display: none; }
+.sheet details.between > summary::before, .sheet details.status-history > summary::before { content: "▸"; }
+.sheet details.between[open] > summary::before, .sheet details.status-history[open] > summary::before { content: "▾"; }
+.sheet details.status-history[open] > summary { margin-bottom: 8px; }
+/* a message and its replies: who, the words, the time; the reply indented under it */
+.thread { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.thread li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 0 8px; font-size: 14px; }
+.thread .speaker { font-weight: 700; }
+.thread .words { overflow-wrap: anywhere; white-space: pre-wrap; }
+.thread time { display: inline; font-size: 11px; color: var(--muted); }
+.thread .reply-line { margin-left: 12px; padding-left: 10px; border-left: 2px solid var(--accent); }
+.thread .pending .words { color: var(--muted); font-style: italic; }
+/* Read aloud: under the reply's words. */
+.thread .read-row { grid-column: 2 / -1; display: flex; gap: 6px; margin-top: 4px; }
+.thread .read[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.kind.message { color: var(--muted); border: 1px solid currentColor; }
+.kind.reply { color: var(--accent); border: 1px solid currentColor; }
+
+/* overlords */
+.rank-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.rank-item { display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 8px 8px 8px 4px; touch-action: pan-y; }
+.rank-item.dragging { opacity: 0.85; border-color: var(--accent); box-shadow: 0 6px 18px rgb(0 0 0 / 0.3); position: relative; z-index: 2; }
+.handle { flex: none; width: 36px; min-height: 44px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 20px; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.rank-no { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--panel-raised); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; }
+.rank-item .grow { display: flex; flex-direction: column; gap: 2px; }
+.rank-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.move { width: 36px; min-height: 36px; padding: 0; font-size: 14px; }
+.code { font-family: var(--mono); font-size: 30px; font-weight: 800; letter-spacing: 0.08em; text-align: center; padding: 8px 0 2px; user-select: all; -webkit-user-select: all; }
+.list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+/* The workshop link's rules, under its switch. */
+.rules { margin: 0; padding-left: 18px; font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+/* A message between overlords: set apart from David's own by an accent rule. */
+.link-thread { border-left: 3px solid var(--waiting); padding-left: 10px; }
+.link-thread .link-line .speaker { color: var(--waiting); }
+.link-thread .failed .words { color: var(--blocked); }
+.list li { display: flex; align-items: center; gap: 10px; }
+.list .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.invite-url { font-family: var(--mono); font-size: 12px; word-break: break-all; user-select: all; -webkit-user-select: all; }
+/* Above an open sheet (z-index 20), so a send from a golem's sheet shows how it went. */
+.toast {
+  position: absolute; left: 16px; right: 16px; bottom: max(76px, calc(env(safe-area-inset-bottom) + 76px - var(--frame-short, 0px))); z-index: 30; padding: 10px 14px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--panel-raised); color: var(--text); font-size: 14px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+}
+.toast-action { display: block; margin-top: 8px; }
+.toast.error { border-color: var(--blocked); color: var(--blocked); }
+.toast.bare { bottom: max(16px, calc(env(safe-area-inset-bottom) + 16px - var(--frame-short, 0px))); }
+@media (prefers-reduced-motion: no-preference) {
+  .toast { animation: toast-in 180ms ease-out; }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
+}
+.error { color: var(--blocked); font-size: 14px; }
+
+/* screen measurements (Settings header tapped five times, or ?debug=1) */
+.frame-check { position: fixed; z-index: 40; left: 8px; right: 8px; top: calc(env(safe-area-inset-top) + 8px); max-height: 70%; overflow: auto; padding: 10px 12px; background: var(--panel-raised); border: 1px solid var(--accent); border-radius: 12px; font-size: 12px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.35); }
+.frame-check-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.frame-check dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 10px; margin: 0; }
+.frame-check dt { color: var(--muted); }
+.frame-check dd { margin: 0; font-family: var(--mono); overflow-wrap: anywhere; }
+
+/* sign in */
+.signin { display: flex; flex-direction: column; align-items: center; gap: 14px; margin-top: 12vh; text-align: center; }
+.signin img { width: 96px; height: 96px; border-radius: 22px; filter: drop-shadow(0 0 16px var(--accent-glow)); }
+.signin h2 { margin: 0; font-family: var(--display); font-size: 26px; }
+.signin p { margin: 0; max-width: 300px; color: var(--muted); line-height: 1.4; }
+.signin button { min-width: 240px; }
+
+/* attachments: Attach, then each picked file as a removable chip */
+.attach-bar { display: flex; flex-direction: column; gap: 6px; }
+.attach-row { display: flex; align-items: center; gap: 10px; }
+button.attach { display: inline-flex; align-items: center; gap: 6px; }
+.attach-icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.attached { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 2px 4px 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-raised); font-size: 13px; }
+.chip img, .chip-icon { width: 32px; height: 32px; flex: none; border-radius: 6px; object-fit: cover; }
+.chip-icon { display: grid; place-items: center; color: var(--muted); }
+.chip-name { min-width: 0; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip-size { flex: none; color: var(--muted); font-size: 12px; }
+button.chip-remove { min-height: 36px; min-width: 36px; padding: 0; border: none; background: none; font-size: 20px; line-height: 1; color: var(--muted); }
+.said-files { font-size: 12px; color: var(--muted); }
+
+/* Artifacts */
+.card.artifact { gap: 4px; }
+.artifact-search { width: 100%; box-sizing: border-box; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; min-height: 44px; color: var(--text); font: inherit; font-size: 16px; }
+.artifact-cards { display: contents; }
+.artifact-snippet { overflow-wrap: anywhere; }
+.artifact-snippet-field { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+.card.artifact mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 2px; padding: 0 1px; }
+.artifact-title { color: var(--text); text-decoration: none; white-space: normal; overflow-wrap: anywhere; }
+a.artifact-title, button.artifact-title.link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+button.artifact-title.link { background: none; border: none; padding: 0; min-height: 0; text-align: left; font-weight: 700; }
+.card.artifact.gone .artifact-title { color: var(--muted); text-decoration: line-through; }
+.artifact-state { background: var(--panel); color: var(--muted); border: 1px solid var(--border); }
+.artifact-state[data-state="marked"] { color: var(--waiting); border-color: currentColor; }
+.artifact-state[data-state="deleting"] { color: var(--accent); border-color: currentColor; }
+.artifact-state[data-state="failed"] { color: var(--blocked); border-color: currentColor; }
+.artifact-actions { justify-content: flex-end; }
+.artifact-confirm-title { font-weight: 700; overflow-wrap: anywhere; }
+button.danger-fill { background: var(--blocked); border-color: var(--blocked); color: var(--blocked-text); }
+.markdown { font-size: 15px; line-height: 1.55; overflow-wrap: anywhere; }
+.markdown h1 { font-size: 20px; } .markdown h2 { font-size: 17px; } .markdown h3 { font-size: 15px; }
+.markdown pre { overflow-x: auto; padding: 8px; border-radius: 8px; background: var(--bg); font-size: 12px; }
+.markdown code { font-family: var(--mono); font-size: 13px; }
+.markdown table { display: block; overflow-x: auto; border-collapse: collapse; font-size: 13px; }
+.markdown th, .markdown td { border: 1px solid var(--border); padding: 4px 6px; }
+.markdown a { color: var(--accent); }
+
+/* Changelog sheet and the What's new card on Fleet (README "Changelog") */
+.changes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.change { display: flex; align-items: baseline; gap: 8px; font-size: 15px; line-height: 1.4; }
+.change-area { flex: none; min-width: 56px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 11px; text-align: center; color: var(--muted); }
+.change-text { min-width: 0; overflow-wrap: anywhere; }
+.whats-new { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; border-color: var(--accent); }
+.whats-new-title { font-family: var(--display); color: var(--accent); }
+.whats-new .actions { justify-content: flex-end; flex-wrap: wrap; }
+
+/* Workshops list: version line and the Update automatically switch. */
+.list .auto-update { display: flex; align-items: center; gap: 8px; margin-top: 4px; min-height: 44px; }
+.list .auto-update input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent, currentColor); }
+.list .version-line { overflow-wrap: anywhere; }
+
+/* Tasks: cards like the Fleet's, a sheet with every field. */
+.task-new { width: 100%; }
+.card.task.gone .card-name { color: var(--muted); text-decoration: line-through; }
+.tag.task-priority[data-priority="urgent"] { background: var(--blocked); color: var(--blocked-text); }
+.tag.task-priority[data-priority="high"] { background: var(--queued); }
+.task-actions { justify-content: flex-end; }
+/* Open email: a link that looks like the small buttons beside it. */
+a.task-email { display: inline-flex; align-items: center; min-height: 36px; padding: 6px 12px; font-size: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-raised); color: inherit; text-decoration: none; }
+.task-form { display: flex; flex-direction: column; gap: 10px; }
+.task-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.task-field input, .task-field textarea { background: var(--panel-raised); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; min-height: 40px; color: var(--text); font: inherit; font-size: 16px; }
+.task-proposal { padding: 8px 10px; border: 1px solid var(--accent); border-radius: 10px; }
+.task-start { width: 100%; }
+
+/* Waiting on you: the ask leads each card, then what it unblocks; the controls answer in place. */
+.waiting-ask { font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
+.waiting-detail { font-size: 13px; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 9em; overflow: auto; }
+.waiting-actions { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.waiting-actions a { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--accent); color: var(--accent); text-decoration: none; font-weight: 700; font-size: 13px; }
+.waiting-link { color: var(--accent); font-size: 13px; }
+.tag.waiting-kind[data-kind="gate"], .tag.waiting-kind[data-kind="stopped"] { background: var(--queued); }
+.safety-code { font: 600 26px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.08em; text-align: center; margin: 12px 0; }
+
+/* The Orchestrator chat (public/quiet-chat.js): the desktop's Quiet feed as a conversation, in the app's own colors and type. */
+.chat { margin: 12px -16px 0; padding: 12px 12px 8px; max-height: 62vh; overflow: hidden auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 2px; background: var(--bg); border-block: 1px solid var(--border); }
+.chat-day { align-self: center; margin: 10px 0 6px; }
+.chat-day span { display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--panel-raised); color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.04em; }
+.chat-empty { align-self: center; color: var(--muted); font-size: 14px; margin: 16px 0; }
+.bubble { position: relative; max-width: 84%; min-width: 0; padding: 7px 11px 5px; border-radius: 16px; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.bubble.first { margin-top: 8px; }
+.bubble.me { align-self: flex-end; background: var(--bubble-me); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--panel)); }
+.bubble.them { align-self: flex-start; background: var(--panel-raised); border: 1px solid var(--border); }
+.bubble.me.last { border-bottom-right-radius: 4px; }
+.bubble.them.last { border-bottom-left-radius: 4px; }
+.bubble.note { border-color: var(--waiting); }
+.bubble[data-state="queued"] { border-style: dashed; }
+.bubble-tag { font-size: 12px; font-weight: 700; color: var(--waiting); margin-bottom: 2px; }
+.bubble .markdown { font-size: 15px; line-height: 1.4; }
+.bubble .markdown > :first-child { margin-top: 0; }
+.bubble .markdown > :last-child { margin-bottom: 0; }
+.bubble .markdown p, .bubble .markdown ul, .bubble .markdown ol, .bubble .markdown blockquote, .bubble .markdown pre { margin: 6px 0; }
+.bubble .markdown ul, .bubble .markdown ol { padding-left: 20px; }
+.bubble .markdown h1, .bubble .markdown h2, .bubble .markdown h3 { font-family: var(--display); font-size: 16px; margin: 8px 0 4px; }
+.bubble .markdown blockquote { padding-left: 10px; border-left: 3px solid var(--border); color: var(--muted); }
+.bubble .markdown pre { background: var(--bg); }
+.bubble-meta { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bubble-state[data-state="sent"] { color: var(--accent); }
+.bubble-state[data-state="queued"] { color: var(--queued); }
+.bubble-state[data-state="unconfirmed"] { color: var(--stale); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.bubble.typing { display: flex; gap: 4px; padding: 12px 14px; }
+.bubble.typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: chat-typing 1.2s infinite ease-in-out; }
+.bubble.typing span:nth-child(2) { animation-delay: 0.15s; }
+.bubble.typing span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes chat-typing { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .bubble.typing span { animation: none; opacity: 0.6; } }
+.chat-form { margin-top: 10px; gap: 6px; }
+.chat-composer { display: flex; align-items: flex-end; gap: 8px; }
+.answer .chat-composer textarea { flex: 1; min-height: 44px; max-height: 140px; resize: none; border-radius: 22px; padding: 11px 16px; }
+.chat-send { flex: none; width: 44px; min-height: 44px; padding: 0; border-radius: 50%; font-size: 17px; line-height: 1; }
+.chat-plus { flex: none; width: 44px; min-height: 44px; padding: 0; border: none; border-radius: 50%; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; }
+.chat-plus:hover:not(:disabled) { color: var(--accent); }
+.chat-plus .attach-icon { width: 26px; height: 26px; stroke-width: 2; }
+.chat-form .attach-bar:not(:has(li)) { display: none; }
+/* A golem's slash commands (public/slash-commands.js): over the chat's row or under the sheet's box, in the flow so the keyboard never covers it. */
+.slash-list { list-style: none; margin: 0; padding: 4px; max-height: min(38vh, 300px); overflow: hidden auto; overscroll-behavior: contain; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 14px; }
+.slash-list[hidden] { display: none; }
+/* With the keyboard up the chat sheet is only what it leaves (--vv-top, --vv-bottom): the list takes at most 40% of that, so the row stays on the keyboard. */
+.sheet.keyboard .slash-list { max-height: min(300px, calc((100dvh - var(--vv-top, 0px) - var(--vv-bottom, 0px)) * 0.4)); }
+.slash-row { display: flex; flex-direction: column; gap: 1px; min-height: 44px; justify-content: center; padding: 6px 10px; border-radius: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.slash-row[aria-selected="true"], .slash-row:hover { background: color-mix(in srgb, var(--accent) 16%, var(--panel-raised)); }
+.slash-name { font: 600 14px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text); overflow-wrap: anywhere; }
+.slash-about { font-size: 12px; line-height: 1.35; color: var(--muted); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.slash-none { padding: 10px; font-size: 13px; color: var(--muted); }
+.bubble-files .attached.sent { margin: 2px 0 4px; }
+.bubble-files .chip { border-color: transparent; }
+/* A kept photo shows as the photo, as a chat app shows one; a file keeps its icon and name. */
+.bubble-files .chip:has(img) { padding: 0; background: transparent; }
+.bubble-files .chip:has(img) .chip-name { display: none; }
+.bubble-files .chip img { width: min(220px, 100%); height: auto; max-height: 260px; border-radius: 12px; }
+/* The Orchestrator's sheet ends at its message row: a fixed-height column, the conversation scrolling above the row, nothing under it. */
+.sheet:has(> .chat-sheet) { top: var(--vv-top, 0px); bottom: var(--vv-bottom, 0px); }
+.sheet-body.chat-sheet { display: flex; flex-direction: column; height: 85%; overflow: hidden; }
+.chat-sheet > * { flex: none; }
+.chat-sheet .chat { flex: 1 1 auto; min-height: 0; max-height: none; }
+/* Few bubbles sit just over the row, as in a chat app. */
+.chat-sheet .chat > :first-child { margin-top: auto; }
+/* Its needs: compact cards on the chat's own ground, pinned over the message row and pushing the conversation up; past 40% of the sheet they scroll on their own. */
+.chat-sheet .chat:has(~ .chat-needs) { border-bottom: none; }
+.chat-needs { margin: 0 -16px; padding: 4px 12px 10px; max-height: 40%; overflow: hidden auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 8px; background: var(--bg); border-bottom: 1px solid var(--border); }
+.chat-need { display: flex; flex-direction: column; gap: 6px; padding: 9px 12px; border-radius: 16px; border: 1px solid var(--blocked); background: var(--panel-raised); font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.chat-need.gate { border-color: var(--queued); }
+.chat-need-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
+.chat-need-head .kind { flex: none; }
+.chat-need-text { flex: 1 1 auto; min-width: 0; font-weight: 700; }
+.chat-need-head time { font-size: 11px; color: var(--muted); }
+.chat-need-does { font-size: 13px; color: var(--muted); }
+.chat-need-why { font-size: 13px; color: var(--queued); }
+/* The Orchestrator's question first (G-110): the conversation behind it dimmed and out of reach (inert), the question over the row, scrolling on its own past 60% of the sheet. */
+.chat-sheet.asking .chat { opacity: 0.35; filter: saturate(0.5); transition: opacity 0.2s; }
+.chat-sheet .chat:has(~ .ask-first) { border-bottom: none; }
+.ask-first { margin: 0 -16px; padding: 12px 16px 10px; max-height: 60%; overflow: hidden auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 8px; background: var(--panel-raised); border-top: 3px solid var(--blocked); box-shadow: 0 -8px 20px rgb(0 0 0 / 0.18); font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; outline: none; }
+.ask-first.gate { border-top-color: var(--queued); }
+.ask-first-head { display: flex; align-items: baseline; gap: 8px; }
+.ask-first-of { font-size: 12px; font-weight: 700; color: var(--muted); }
+.ask-first-head time { margin-left: auto; font-size: 11px; color: var(--muted); }
+.ask-first-text { margin: 0; font-size: 17px; font-weight: 700; }
+.ask-first .item-options { display: flex; flex-direction: column; gap: 6px; }
+.ask-first .option.pick { min-height: 44px; text-align: left; }
+.ask-first .option.pick.has-context { flex: none; }
+.ask-first-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+/* Put off with Not now: one bar over the row that brings the questions back. */
+.chat-waits { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 10px 6px 12px; border: 1px solid var(--border); border-left: 3px solid var(--blocked); border-radius: 8px; background: var(--panel-raised); color: var(--muted); font-size: 13px; text-align: left; }
+.chat-waits .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.chat-waits-open { flex: none; font-weight: 700; color: var(--accent); }
+.chat-attention { margin: 8px 0 0; }
+/* A reply that came while scrolled up: pinned to the conversation's bottom edge until he goes down to it. */
+.chat-new { position: sticky; bottom: 8px; z-index: 1; align-self: center; margin-top: 8px; min-height: 34px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--accent); background: var(--panel); color: var(--accent); font-size: 13px; font-weight: 700; box-shadow: 0 4px 12px rgb(0 0 0 / 0.25); }
+.sheet-x { flex: none; width: 36px; min-height: 36px; padding: 0; border-radius: 50%; font-size: 16px; line-height: 1; color: var(--muted); }
+/* Keyboard open: the sheet fills what it leaves, and the row sits on it (the keyboard covers the home indicator). */
+.sheet.keyboard > .chat-sheet { height: calc(100% - 8px); max-height: none; padding-bottom: 8px; border-radius: 12px 12px 0 0; }
+

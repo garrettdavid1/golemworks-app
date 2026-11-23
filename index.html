@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' https://hub.golemworks.app; base-uri 'none'; form-action 'self'" />
+  <meta name="golemworks-hub" content="https://hub.golemworks.app" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Golemworks</title>
+  <meta name="description" content="Golemworks Mobile: your workshops' overlords and golems" />
+  <meta name="theme-color" content="#0a0f1e" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#eef1f8" media="(prefers-color-scheme: light)" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Golemworks" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+  <link rel="stylesheet" href="/vendor/golemworks/golem-art/golem-art.css" integrity="sha384-gMmIOSfrzNTg4BGVBlEKReBtfTzTVH3e2Um/VKKh53bsQZSFMkt98ullWbXV7aYS" />
+  <link rel="stylesheet" href="/style.css" integrity="sha384-Xj+VgUE7iaz4/ZhRibCTDkxNCAIgpsWarWQF7cdwCMqOrJh28l7LHJh9n2a/9Ujq" />
+  <link rel="stylesheet" href="/vendor/golemworks/golems.css" integrity="sha384-Ii5k+Xspftd+KjhcJ9h7TmCRsFjKrr10nif4JHwzfAXBm7a4M61TAqR/ilmKER5S" />
+  <link rel="stylesheet" href="/golems-phone.css" integrity="sha384-NTWFrmn3PthS0WBWVCKY3YLIHtvWJ/hMn/WIHdk6/9lXztb9cQa3KXoY3WQNgCe7" />
+  <script src="/theme.js" integrity="sha384-7GdY+dgO+mVUY55uWrxnNiasgn3khLM4iiw7WjZzbzL7xVCXc6S2EGsdyUydWJci"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="top">
+      <img class="brand-mark" src="/icons/icon-192.png" alt="" width="28" height="28" />
+      <h1 id="title">Golemworks</h1>
+      <span id="conn" class="conn" role="status"></span>
+    </header>
+    <div id="encryption-banner" class="encryption-banner" role="status" hidden></div>
+    <main id="main" tabindex="-1"></main>
+    <nav id="tabs" class="tabs" aria-label="Screens" hidden>
+      <a href="#fleet" data-screen="fleet"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 5.2 12 3l4.5 2.2 1.3 4.6-1.9 4.3H8.1L6.2 9.8z" /><path d="M9.6 9.1h1.3M13.1 9.1h1.3" /><path d="M5.5 20.5 8 17h8l2.5 3.5" /></svg><span>Fleet</span><span id="fleet-badge" class="badge" hidden></span></a>
+      <a href="#waiting" data-screen="waiting"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z" /><path d="M12 7.5V12l3 2" /></svg><span>Waiting</span></a>
+      <a href="#tasks" data-screen="tasks"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 4.5h15v15h-15z" /><path d="M8 12.2l2.6 2.6L16 9.4" /></svg><span>Tasks</span></a>
+      <a href="#artifacts" data-screen="artifacts"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l4 4V20.5H7z" /><path d="M14 3.5v4h4" /><path d="M9.5 12h6M9.5 15.5h6" /></svg><span>Artifacts</span></a>
+      <a href="#settings" data-screen="overlords"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 5.8 10.6 3.3h2.8l.3 2.5 1.5.7 2-1.6 1.9 1.9-1.6 2 .7 1.5 2.5.3v2.8l-2.5.3-.7 1.5 1.6 2-1.9 1.9-2-1.6-1.5.7-.3 2.5h-2.8l-.3-2.5-1.5-.7-2 1.6-1.9-1.9 1.6-2-.7-1.5-2.5-.3v-2.8l2.5-.3.7-1.5-1.6-2 1.9-1.9 2 1.6z" /><path d="M12 9.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6z" /></svg><span>Settings</span></a>
+    </nav>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <div id="sheet" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheet-title"></div>
+  </div>
+  <script src="/vendor/simplewebauthn.js" integrity="sha384-06g944bCm8L/wG3i0Q8PdB8jccE4GdpHdNCa1tJY8eMqoP3GIHGJdL6B5lD5OMGD"></script>
+  <script src="/vendor/golemworks/merged-today.js" integrity="sha384-ah04DSrMAiSSR6OqHRMAy73Elu69WTHGuWHMQI6555lSPDuoJkVTA/i6x7QqBAA3"></script>
+  <script src="/vendor/golemworks/golem-art/golem-art.js" integrity="sha384-P+NbyvrXlwcUg3FOIxdCLr4N1+34i2xH2Y9ybI6v8/XO8Zjei6+amS9oKX9GosJ9"></script>
+  <script src="/vendor/golemworks/golem-path.js" integrity="sha384-7g9jgjF9/JYEUXiFiIrvVdpS2bOKE3Zwu4t3sxgfd6gFoOhES1OCSaMi2YthXKcU"></script>
+  <script src="/vendor/golemworks/golems.js" integrity="sha384-exhJMdRN1sQ32hBxDGv6lXb/jTVKDk8rUw02dZAhqWnrXMF2e6yZZd/ITcPLpvLn"></script>
+  <script src="/frame.js" integrity="sha384-ouqYHl79CI7xyOjCD+Nl04tijSa5g1Nd42aRuWxrTVF6iXzYXOVD6Vh9Laq4MPd/"></script>
+  <script src="/sheet-drag.js" integrity="sha384-RaFS8UBK5Jh4PuUVDkZ1iWZlsoQOMcIIJhT1wD2W9rWnYE2IaWNrGUQ17RReTMlW"></script>
+  <script src="/needs.js" integrity="sha384-YrzhfuG6G5XqNVFy+3NeClcjnoqCHe+dHfjPle5m2Wi2eLq+6HQwiVYxst0mPyps"></script>
+  <script src="/speech.js" integrity="sha384-8adenaj/fY5zoCZtSQH8Va5Rp6s8SH+r16bZLu2sO9iPxggTckVB7wWTIrGtnqQ3"></script>
+  <script src="/thread.js" integrity="sha384-dTHtUmFdzh/S8MX56ABn0ZyQNm5ZbOEkFdv0EQezuBgFVZ8O+XhEOuRJeJvtVG3k"></script>
+  <script src="/quiet-chat.js" integrity="sha384-5efltZAFeD3HX5skdCZPV3rhDTaWcggNFTZVuFh6SUa5ekof5YzQR4SZMWYvEeve"></script>
+  <script src="/ask-first.js" integrity="sha384-3fXez7rZOIbyuJEWagiFMuydn4k9qLW+ulVsBnkmofGZdwwNsaQplD2WxRjocBEy"></script>
+  <script src="/ask-context.js" integrity="sha384-0I4bBoLEIC45xv9X+Uk6BKLD4m6F1R5Ewuv4wkhPYki5Z5DMVmPntL9eJ3SlONBL"></script>
+  <script src="/slash-commands.js" integrity="sha384-uPtSgcsSWE6+IqWjgKnRQ4qg51M8/LA6ZIMYrp3EfTqFy+uyX6VJLQ6yYm9kSWHv"></script>
+  <script src="/vendor/e2e/libsodium.js" integrity="sha384-3KUAqev6nUaNHDSTa/UjyEycVN8iMfq/UtzKf3ZDTuGSb+P3y9kMu/WCVqnLAxUB"></script>
+  <script src="/vendor/e2e/libsodium-wrappers.js" integrity="sha384-uj62oy76l27Bkf3eEP5knMYc094z6HzwAR7Rn8ZZcBBsg5nMibZXSvjRqgZMFg/L"></script>
+  <script src="/vendor/e2e/e2e.js" integrity="sha384-TX/FDvPEGo5M++G8cikx8k0GA7nS8FQUewzBA22pNVAZwHWyuPpPcYNF1svLlcJh"></script>
+  <script src="/task-merge.js" integrity="sha384-lYtR2ZoRHNCO7JrdSprMkVtdrg1mMWudqXTZOcZ11tOOO+GtOqMwo0XQAqCmifqs"></script>
+  <script src="/task-reader.js" integrity="sha384-3zuCttYltEbXwaGppIypmIHhzKEpTQT1LsLxVgBoPh6IbYAV+r4dtzVJ9SWZUpLt"></script>
+  <script src="/sealed.js" integrity="sha384-ozRtFzrQGuhrC0C5Km+Ott2GjeP71xFo2jtUnqTsMkIWX0dfSFPnpleWEDLg1TO0"></script>
+  <script src="/enroll.js" integrity="sha384-IuSQ2vu1sdt9pUk3pIGQ9Ehns9e0TwXnNKvSCt8VJcZ7qNtUDqvq7D8vj290a15o"></script>
+  <script src="/encryption-guide.js" integrity="sha384-F3A2Bm/E+HTMfrND1ido+7nmidAUHZCp5oLOGd2piR/G8CRg9k3QU4+JIIV72MSN"></script>
+  <script src="/acts.js" integrity="sha384-uowGstn5O9RkH2VsIbLBpKEL9egULOpazL9i9DzQeAGOJU6MHxgfq5T/st910y/o"></script>
+  <script src="/artifact-search.js" integrity="sha384-0wXSPKbkHeNr3jd6SvmJtZsuN+HUznK7UGRvmc7itsb59Q63A0Tb03BL+dY2qGOL"></script>
+  <script src="/artifact-list.js" integrity="sha384-uMDjhteOOmcg9/9ceNjdF3Rl1lrr9gJb6G0WNiKMjE7Y35djtFx4YLOss2qam7tI"></script>
+  <script src="/vendor/markdown-it.js" integrity="sha384-ARStLecQmtLYjBgfD3+w+irhiSoLTnFk/ne6c0gRWQKQtC9791ZLMQ9D3OaBISt3"></script>
+  <script src="/vendor/purify.js" integrity="sha384-P0JNneQf81HOl9VwNXK76cQ9VMD6Nfsnepxb0cCOg8+UzEdzgPHAPV4wVQrvYQSx"></script>
+  <script src="/app.js" integrity="sha384-ATZxzhpvCCkdeS8GLlkx4kNALXawRGLlQRmO10hDp4yG3AoLYIdR2Z324T7z8Frj"></script>
+</body>
+</html>
