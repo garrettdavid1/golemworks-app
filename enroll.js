@@ -28,6 +28,16 @@
 
     const mine = () => state?.devices.find((d) => d.mine) || null;
     const others = () => (state?.devices || []).filter((d) => !d.mine);
+    // The hub's record for this passkey is this page only while it carries this page's key: Safari and its Home Screen app share the passkey but not their keys.
+    const isThisPage = (own) => Boolean(own && keys && (!own.publicKey || own.publicKey === b64(keys.device.publicKey)));
+    // This page holds the key while its passkey's other page (the Home Screen app) asks for it: this page approves that request.
+    const handsOver = (own) => Boolean(own && own.kind === "phone" && PENDING.includes(own.state) && newestKey() && !ours(own));
+    // The waiting devices this page may act on: others' when it holds the key, or its own passkey's request when it hands the key over.
+    const actable = () => {
+      const own = mine();
+      if (own?.state === "active" && isThisPage(own) && newestKey()) return others();
+      return handsOver(own) ? [own] : [];
+    };
     const newestKey = () => {
       const epoch = Math.max(...Object.keys(keys?.accountKeys || {}).map(Number));
       return Number.isFinite(epoch) ? { epoch, key: keys.accountKeys[epoch] } : null;
@@ -65,9 +75,9 @@
       own = mine();
       if (own?.state === "keyed" && !changed(own) && memo.get(`confirmed:${own.id}`) === pinned(own)) await open(own);
       own = mine();
-      if (own?.state === "active" && own.rotation) await takeRotation(own.rotation);
+      if (own?.state === "active" && isThisPage(own) && own.rotation) await takeRotation(own.rotation);
       // A device left and no phone has made the next epoch yet: this one does (any phone that holds the key).
-      if (mine()?.state === "active" && state.rotationDue && newestKey()) await rotate();
+      if (mine()?.state === "active" && isThisPage(mine()) && state.rotationDue && newestKey()) await rotate();
       return view();
     }
 
@@ -152,18 +162,21 @@
     function view() {
       if (!state?.on) return { on: false };
       const own = mine();
-      const holdsKey = own?.state === "active" && Boolean(newestKey());
-      const waiting = holdsKey ? others().filter((d) => PENDING.includes(d.state)).map((d) => ({ ...d, mineToConfirm: d.approver?.deviceId === own.id, check: d.state !== "committed" && d.publicKey ? check(d) : null })) : [];
-      const pending = own && PENDING.includes(own.state);
+      const holdsKey = own?.state === "active" && isThisPage(own) && Boolean(newestKey());
+      const handing = handsOver(own);
+      const tookOn = (d) => (d.approver?.self ? d.approver.publicKey === b64(keys.device.publicKey) : d.approver?.deviceId === own.id);
+      const waiting = actable().filter((d) => PENDING.includes(d.state)).map((d) => ({ ...d, mineToConfirm: tookOn(d), check: d.state !== "committed" && d.publicKey ? check(d) : null }));
+      const pending = own && PENDING.includes(own.state) && !handing;
       return {
         on: true,
         accountId: state.accountId,
         mine: own,
         holdsKey,
+        handsOver: handing,
         canAsk: !own && !holdsKey,
         // The hub knows this passkey's device, but the key is not on this page (a Home Screen app keeps its own storage): it asks again, approved by another phone.
         rekey: own?.state === "active" && own.kind === "phone" && !newestKey() && others().some((d) => d.state === "active" && d.kind === "phone"),
-        approverChanged: changed(own),
+        approverChanged: !handing && changed(own),
         confirmed: Boolean(pending && memo.get(`confirmed:${own.id}`)),
         // A new phone's code: the approver it pinned and its own key.
         code: pending && pinned(own) && memo.get("attempt")?.accountId ? E.safetyCode(raw(pinned(own)), keys.device.publicKey, memo.get("attempt").accountId) : null,
@@ -204,16 +217,17 @@
 
     /** Takes a committed device on: remembers its commitment first, so a key it reveals later must match it. */
     async function take(id) {
-      const device = others().find((d) => d.id === id && d.state === "committed");
+      const device = actable().find((d) => d.id === id && d.state === "committed");
       if (!device) throw new Error("that device is no longer waiting");
       memo.set(`commitment:${id}`, device.commitment);
-      state = await api("POST", `/api/devices/${encodeURIComponent(id)}/approve`);
+      // Its own passkey's request: the hub has no record of this page's key, so this page names it.
+      state = await api("POST", `/api/devices/${encodeURIComponent(id)}/approve`, device.mine ? { publicKey: b64(keys.device.publicKey) } : undefined);
       return view();
     }
 
     /** The approver's They match: the account key, boxed from this phone's key to the device's. send wraps the request (Face ID). */
     async function confirm(id, send = (request) => request()) {
-      const device = others().find((d) => d.id === id && d.state === "revealed");
+      const device = actable().find((d) => d.id === id && d.state === "revealed");
       if (!device) throw new Error("that device is not ready for the key");
       if (check(device).mismatch) throw new Error("its key does not match what it promised: tap They don't match");
       const { epoch, key } = newestKey();
@@ -344,7 +358,7 @@
       if (view.canAsk) {
         return once("ask", [title("Approve this device"), h("p", {}, "Mobile here needs approval from another device where you already use Mobile. Ask, then open Mobile there."), row(h("button", { type: "button", onclick: closeSheet }, "Not now"), button("Ask for approval", () => enrollment.ask(), { primary: true }))]);
       }
-      if (own && PENDING.includes(own.state)) {
+      if (own && PENDING.includes(own.state) && !view.handsOver) {
         if (view.approverChanged) return once(`changed-${own.id}`, [title("Another device answered"), h("p", {}, "The answer came from a different device than the one you compared codes with. Nothing was taken."), row(button("Start over", () => enrollment.reject(own.id).then(() => enrollment.ask()), { danger: true }))]);
         if (!view.code) return once(`wait-${own.id}`, [title("Waiting for your other device"), h("p", {}, "Open Mobile on another device you already use and tap Start there.")]);
         if (view.confirmed) return once(`sent-${own.id}`, [title("Waiting for your other device"), h("p", { class: "safety-code" }, showCode(view.code)), h("p", {}, "Tap They match in Mobile on your other device too.")]);
@@ -366,7 +380,10 @@
       }
       const device = view.next;
       if (!device) return quiet();
-      const what = device.kind === "workshop" ? `the computer "${device.name}"` : `a new device in Mobile ("${device.name}")`;
+      const what = device.kind === "workshop" ? `the computer "${device.name}"` : device.mine ? "Mobile on this device's Home Screen" : `a new device in Mobile ("${device.name}")`;
+      if (device.state === "committed" && device.mine) {
+        return once(`take-${device.id}`, [title("Your Home Screen app asks for the key"), h("p", {}, "Mobile on this device's Home Screen asks for the key this Safari page holds. Start only if you just tapped Ask for approval there; it takes over from this page."), row(button("Not mine", () => enrollment.reject(device.id)), button("Start", () => enrollment.take(device.id), { primary: true }))]);
+      }
       if (device.state === "committed") {
         return once(`take-${device.id}`, [title("A new device asks to join"), h("p", {}, `${cap(what)} asks to join your account. Start only if you just added it.`), row(button("Not mine", () => enrollment.reject(device.id)), button("Start", () => enrollment.take(device.id), { primary: true }))]);
       }
