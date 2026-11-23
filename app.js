@@ -618,7 +618,7 @@
   const KIND = {
     permission: ["Permission", "Pick what the desktop would: Yes runs it. A reply alone says No and tells the golem why."],
     plan: ["Plan", "Pick how to go on, or reply to keep it planning with your note."],
-    question: ["Question", "Pick an answer, or write your own: it goes in as the answer."],
+    question: ["Question", "Pick an answer, add words if you like, and Send: they go in together as the answer."],
     dialog: ["Dialog", "Pick an option, or reply to cancel it and say why."],
     gate: ["Gate", "Approve moves the flow on. Hold sends it back with your note. A reply alone asks the golem without deciding."],
     stopped: ["Stopped", "Resume starts the Orchestrator's session again, as the desktop's Resume does. Words sent with it wait until it is back."],
@@ -651,7 +651,8 @@
     const answerable = !ask.answeredAt && ask.online !== false && !ask.stale && (ask.options?.length || ask.reply);
     const [label, kindDoes] = KIND[ask.kind] || KIND.unknown;
     // A question with no options to pick takes words only; its why says so.
-    const does = ask.kind === "question" && !ask.options?.length ? "Answer in your own words." : kindDoes;
+    const questions = answerable && ask.reply ? AskContext.menu(ask) : null;
+    const does = ask.kind === "question" && !ask.options?.length && !questions ? "Answer in your own words." : kindDoes;
     // A gate waits on a yes, not on trouble: amber, not red.
     const state = ask.kind === "gate" ? "waiting" : "blocked";
     const subject = ask.golemType === "overlord" ? `${ask.golem} · overlord` : ask.golem;
@@ -660,10 +661,10 @@
       h("div", { class: "item-head" }, [h("span", { class: `kind ask ${ask.kind === "gate" ? "gate" : ""}` }, ask.answeredAt ? "Answered" : label), h("span", { class: "who" }, subject || ask.overlord), h("span", {}, ago(ask.at))]),
       h("div", { class: "item-text" }, linked(ask.question)),
       AskContext.about(h, context.about),
-      ask.detail ? detailBlock(ask.detail) : null,
+      ask.detail && !questions ? detailBlock(ask.detail) : null,
       ask.context ? h("div", { class: "item-context" }, ["Its status: ", ...linked(ask.context)]) : null,
       answerable ? h("div", { class: "item-does" }, does) : null,
-      ask.why && !ask.answeredAt ? h("div", { class: "item-why" }, ask.why) : null,
+      ask.why && !ask.answeredAt && !questions ? h("div", { class: "item-why" }, ask.why) : null,
       answerable ? answerForm(ask, key, context) : ask.options?.length ? h("div", { class: "item-options" }, context.options.map((o) => h("span", { class: "option" }, o.label))) : null,
       ...(answerable ? [] : AskContext.after(h, context)),
       answerable ? null : h("div", { class: "item-foot" }, `${where(ask)}${ask.answeredAt ? `You answered${ask.answer ? ` "${ask.answer}"` : ""} ${ago(ask.answeredAt)}; waiting for the golem` : ask.online === false ? "Workshop offline" : ask.stale ? staleNote(ask) : ask.why ? "" : "Nothing to answer here"}`),
@@ -706,7 +707,7 @@
   }
 
   /** What a reply box asks for, by the kind of need. */
-  const replyPlaceholder = (ask) => (ask.kind === "gate" ? "A note (Hold needs one)" : ask.kind === "permission" ? "Why not (a reply alone says No)" : ask.kind === "question" ? (ask.options?.length ? "Or write your own answer" : "Your answer, in your words") : ask.kind === "stopped" ? "A message for when it is back (optional)" : ask.options?.length ? "Write a reply, or a note with your pick" : "Write a reply");
+  const replyPlaceholder = (ask) => (ask.kind === "gate" ? "A note (Hold needs one)" : ask.kind === "permission" ? "Why not (a reply alone says No)" : ask.kind === "question" ? (AskContext.menu(ask) ? "Words to send with your picks, or your own answer" : ask.options?.length ? "Words to send with your pick, or your own answer" : "Your answer, in your words") : ask.kind === "stopped" ? "A message for when it is back (optional)" : ask.options?.length ? "Write a reply, or a note with your pick" : "Write a reply");
   /** A need the phone can answer now: not answered, its workshop online and updating, and options or a reply to give. */
   const canAnswer = (ask) => Boolean(!ask.answeredAt && ask.online !== false && !ask.stale && (ask.options?.length || ask.reply));
   /** Why a need cannot be answered here, for its foot line. */
@@ -719,7 +720,7 @@
       h("div", { class: "chat-need-head" }, [h("span", { class: `kind ask${ask.kind === "gate" ? " gate" : ""}` }, ask.answeredAt ? "Answered" : label), h("span", { class: "chat-need-text" }, linked(ask.question)), h("time", { datetime: ask.at }, ago(ask.at))]),
       AskContext.about(h, AskContext.of(ask).about),
       ask.detail ? detailBlock(ask.detail) : null,
-      ask.why && !ask.answeredAt ? h("div", { class: "chat-need-why" }, ask.why) : null,
+      ask.why && !ask.answeredAt && !AskContext.menu(ask) ? h("div", { class: "chat-need-why" }, ask.why) : null,
       answerFoot(ask) ? h("div", { class: "item-foot" }, answerFoot(ask)) : null,
     ]);
   }
@@ -728,11 +729,20 @@
   function askFirstCard(ask, g, { count, form, rowKey }) {
     const askKey = askKeyOf(ask);
     const [label, kindDoes] = KIND[ask.kind] || KIND.unknown;
-    const does = ask.kind === "question" && !ask.options?.length ? "Answer in your own words below." : kindDoes;
+    const questions = ask.reply ? AskContext.menu(ask) : null;
+    const does = ask.kind === "question" && !ask.options?.length && !questions ? "Answer in your own words below." : kindDoes;
     const busy = sending.has(askKey);
     const of = AskFirst.position(count);
     const context = AskContext.of(ask);
+    // A question's option or ticks are chosen here and go with the row's Send, its words beside them (one Send, as on the desktop).
+    const choosing = ask.kind === "question" && ask.reply;
+    const choose = (next) => {
+      drafts.set(askKey, next);
+      for (const [n, button] of [...(options?.querySelectorAll(":scope > .option") || [])].entries()) button.setAttribute("aria-pressed", String(next.option === n));
+      redrawMenu(options, next.picks);
+    };
     const pick = async (i) => {
+      if (choosing) return choose(Thread.pick(drafts.get(askKey), i));
       // A pick goes the row's way, so the row's words and files go with it as its note.
       if (ask.reply) {
         drafts.set(askKey, { option: i, text: form.querySelector("textarea")?.value || "" });
@@ -743,10 +753,13 @@
       await sendAnswer(ask, askKey);
       if (sheetGolem === g) openGolem(g);
     };
-    const options = ask.options?.length
+    const chosen = drafts.get(askKey) || { option: null, picks: null };
+    const options = questions
+      ? AskContext.menuBlock(h, questions, chosen.picks, (qi, oi) => choose(Thread.tick(drafts.get(askKey), questions, qi, oi)), { busy })
+      : ask.options?.length
       ? h("div", { class: "item-options", role: "group", "aria-label": "Options" }, context.options.map((row, i) => {
         const shown = AskContext.option(h, row);
-        return h("button", { type: "button", class: shown.class, disabled: busy, onclick: () => pick(i) }, shown.children);
+        return h("button", { type: "button", class: shown.class, disabled: busy, ...(choosing ? { "aria-pressed": String(chosen.option === i) } : {}), onclick: () => pick(i) }, shown.children);
       }))
       : null;
     const atPc = ["flag", "status", "unknown", "ask"].includes(ask.kind) ? h("button", { type: "button", class: "small", disabled: busy, onclick: async () => {
@@ -763,9 +776,9 @@
       h("div", { class: "ask-first-head" }, [h("span", { class: `kind ask${ask.kind === "gate" ? " gate" : ""}` }, label), of ? h("span", { class: "ask-first-of" }, of) : null, h("time", { datetime: ask.at }, ago(ask.at))]),
       h("p", { class: "ask-first-text", id: title }, linked(ask.question)),
       AskContext.about(h, context.about),
-      ask.detail ? detailBlock(ask.detail) : null,
+      ask.detail && !questions ? detailBlock(ask.detail) : null,
       h("div", { class: "chat-need-does" }, does),
-      ask.why ? h("div", { class: "chat-need-why" }, ask.why) : null,
+      ask.why && !questions ? h("div", { class: "chat-need-why" }, ask.why) : null,
       options,
       ...AskContext.after(h, context),
       AskContext.offers(ask, { answerable: true, sealed: sealedWorkshop(ask.workshopId) }) ? AskContext.bare(h, () => askForContext(ask, g), { busy }) : null,
@@ -816,6 +829,16 @@
     if (g && sheetGolem === g) openGolem(g);
   }
 
+  /** A menu's boxes as the draft's picks have them now, redrawn in place so words typed since stay. */
+  function redrawMenu(root, picks) {
+    for (const b of root.querySelectorAll(".ask-menu [data-q]")) {
+      const on = Boolean(picks?.[Number(b.dataset.q)]?.includes(Number(b.dataset.o)));
+      b.setAttribute("aria-checked", String(on));
+      const mark = b.querySelector(".ask-menu-box");
+      if (mark) mark.textContent = on ? "☑" : "☐";
+    }
+  }
+
   /** Options to pick and, where the golem takes words, a reply box (a reply, or a note with the pick); one Send. */
   function answerForm(ask, key, context = AskContext.of(ask)) {
     const draft = drafts.get(key) || { text: "", option: null };
@@ -828,7 +851,17 @@
       for (const [n, button] of [...options.children].entries()) button.setAttribute("aria-pressed", String(next.option === n));
       send.disabled = busy || (next.option === null && !box);
     };
-    const options = ask.options?.length
+    // A menu (several picks or several questions): its boxes ticked here, sent with the words by the one Send.
+    const questions = ask.reply ? AskContext.menu(ask) : null;
+    const tickOption = (qi, oi) => {
+      const next = Thread.tick(drafts.get(key), questions, qi, oi);
+      drafts.set(key, next);
+      redrawMenu(form, next.picks);
+      send.disabled = busy || (!next.picks.some((p) => p.length) && !box);
+    };
+    const options = questions
+      ? AskContext.menuBlock(h, questions, draft.picks, tickOption, { busy })
+      : ask.options?.length
       ? h("div", { class: "item-options", role: "group", "aria-label": "Options" }, context.options.map((row, i) => {
         const shown = AskContext.option(h, row);
         return h("button", {
@@ -848,7 +881,7 @@
     } }) : null;
     if (box) box.value = draft.text;
     const attach = ask.reply && !namesOnly(ask.workshopId, ask.golemId) ? attachBar(key, { disabled: busy }) : null;
-    const ready = draft.option !== null || Boolean(draft.text.trim());
+    const ready = draft.option !== null || Boolean(draft.text.trim()) || Boolean(draft.picks?.some((p) => p.length));
     // A need the phone cannot do itself (rotate keys in a browser, sign in) still gets an answer: later at the PC, or not now.
     const later = ["flag", "status", "unknown", "ask"].includes(ask.kind)
       ? h("div", { class: "quick" }, [
@@ -865,10 +898,9 @@
   async function sendAnswer(ask, key, { files = key } = {}) {
     if (sending.has(key)) return false; // a sheet's form is not redrawn as busy, so a second tap lands here
     const draft = drafts.get(key) || { text: "", option: null };
-    const text = draft.text.trim();
-    // Attachments alone are an answer: the hub gives the golem words that point at them.
-    if (draft.option === null && !text && !(attached.get(files) || []).length) return toast("Pick an option, write a reply or attach a file first", true), false;
-    const body = { ...(draft.option !== null ? { option: draft.option } : {}), ...(text ? { text } : {}) };
+    // The option or a menu's ticks, with the words beside them; without words, every question needs its pick.
+    const { body, error } = Thread.answerBody(draft, AskContext.menu(ask), { files: (attached.get(files) || []).length });
+    if (error) return toast(error, true), false;
     // In flight: the 10-second refresh keeps this form disabled, so a second tap cannot send it again.
     sending.add(key);
     render();
@@ -877,7 +909,7 @@
       const out = await withFaceId(async () => {
         const acts = await sealerFor(ask.workshopId);
         const ids = await uploadAttached(files, ask.workshopId, acts);
-        const label = draft.option !== null ? { label: ask.options[draft.option] } : {};
+        const label = body.option !== undefined ? { label: ask.options[body.option] } : {};
         const payload = acts ? sealedBody(acts, ask.workshopId, "answer", { askId: ask.id, golemId: ask.golemId, ...body, ...label }, files, ids) : { ...body, ...(ids.length ? { attachments: ids } : {}) };
         return api("POST", `/api/asks/${encodeURIComponent(ask.workshopId)}/${encodeURIComponent(ask.id)}/answer`, payload);
       });

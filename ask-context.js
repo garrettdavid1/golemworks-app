@@ -79,7 +79,38 @@ const AskContext = (() => {
     ]);
   }
 
-  return { label, of, offers, about, option, after, bare };
+  /** A question's menu (several picks or several questions), checked again here as the hub checks it (src/summary.js menu): whole, or null. */
+  function menu(ask) {
+    const value = ask?.kind === "question" ? ask.menu : null;
+    if (!Array.isArray(value) || !value.length || value.length > 4) return null;
+    const kept = value.map((q) => ({
+      question: words(q?.question, 500),
+      multiSelect: q?.multiSelect === true,
+      options: Array.isArray(q?.options) && q.options.length <= 9 ? q.options.map((o) => ({ label: words(o?.label, 120), description: words(o?.description) })) : [],
+    }));
+    return kept.every((q) => q.question && q.options.length && q.options.every((o) => o.label)) ? kept : null;
+  }
+
+  /** The menu as boxes to tick (several go) or options to pick (one goes), each question titled when there are several; onTap(qi, oi) ticks one. */
+  function menuBlock(h, questions, picks, onTap, { busy = false } = {}) {
+    return h("div", { class: "ask-menu" }, questions.map((q, qi) => {
+      const chosen = picks?.[qi] || [];
+      return h("div", { class: "ask-menu-q", role: q.multiSelect ? "group" : "radiogroup", "aria-label": q.question }, [
+        questions.length > 1 ? h("div", { class: "ask-menu-text" }, q.question) : null,
+        q.multiSelect ? h("div", { class: "ask-menu-hint" }, "Pick any that apply.") : null,
+        h("div", { class: "item-options" }, q.options.map((o, oi) => {
+          const recommended = SUFFIX.test(o.label);
+          const on = chosen.includes(oi);
+          return h("button", { type: "button", class: `option pick has-context${recommended ? " recommended" : ""}`, role: q.multiSelect ? "checkbox" : "radio", "aria-checked": String(on), disabled: busy, "data-q": String(qi), "data-o": String(oi), onclick: () => onTap(qi, oi) }, [
+            h("span", { class: "option-label" }, [q.multiSelect ? h("span", { class: "ask-menu-box", "aria-hidden": "true" }, on ? "☑" : "☐") : null, label(o.label), recommended ? h("span", { class: "rec-chip" }, "Recommended") : null]),
+            o.description ? h("span", { class: "option-does" }, o.description) : null,
+          ]);
+        })),
+      ]);
+    }));
+  }
+
+  return { label, of, offers, about, option, after, bare, menu, menuBlock };
 })();
 
 if (typeof module !== "undefined") module.exports = AskContext;

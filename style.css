@@ -149,6 +149,13 @@ h2.group .where { text-transform: none; letter-spacing: 0; font-weight: 500; }
 .option-cost { font-size: 12px; font-weight: 400; color: var(--muted); }
 .ask-why { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .ask-bare { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; font-size: 13px; color: var(--muted); }
+/* a menu (several picks or several questions): its questions, boxes to tick or options to pick */
+.ask-menu { display: flex; flex-direction: column; gap: 10px; }
+.ask-menu-q { display: flex; flex-direction: column; gap: 6px; }
+.ask-menu-text { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+.ask-menu-hint { font-size: 13px; color: var(--muted); }
+.ask-menu-box { font-size: 17px; line-height: 1; }
+.option.pick[aria-checked="true"],
 .option.pick[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--panel-raised)); box-shadow: 0 0 0 1px var(--accent); font-weight: 700; }
 .answer textarea { width: 100%; box-sizing: border-box; min-height: 44px; resize: vertical; padding: 10px 12px; font-size: 16px; line-height: 1.35; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 10px; }
 .answer textarea::placeholder { color: var(--muted); }
