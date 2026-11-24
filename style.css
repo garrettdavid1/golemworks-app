@@ -198,6 +198,8 @@ h2.group .where { text-transform: none; letter-spacing: 0; font-weight: 500; }
 .card-open { display: flex; flex-direction: column; gap: 6px; width: 100%; min-height: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
 .card.need .item.ask { padding: 8px 0 0; background: transparent; border: 0; border-top: 1px solid var(--border); border-radius: 0; }
 .card.need .item-head .who { display: none; }
+/* A golem's question on its overlord's card (the question queue) names who asks. */
+.card.need .item-head .who.from { display: block; }
 .card.need .item-head > span:last-child { margin-left: auto; }
 .card.focused { outline: 2px solid var(--accent); outline-offset: 2px; }
 h2.group.needs { color: var(--blocked); }
@@ -555,6 +557,18 @@ a.task-email { display: inline-flex; align-items: center; min-height: 36px; padd
 .ask-first.gate { border-top-color: var(--queued); }
 .ask-first-head { display: flex; align-items: baseline; gap: 8px; }
 .ask-first-of { font-size: 12px; font-weight: 700; color: var(--muted); }
+/* The question queue on the leading card: who asks, its priority, and See all. */
+.ask-first-from { font-size: 13px; font-weight: 700; color: var(--muted); }
+.ask-priority { padding: 0 7px; border-radius: 999px; border: 1px solid var(--border); font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.ask-priority.urgent { border-color: var(--blocked); background: var(--blocked); color: var(--blocked-text); }
+.ask-priority.high { border-color: var(--blocked); color: var(--blocked); }
+.ask-queue { font-size: 13px; color: var(--muted); }
+.ask-queue summary { cursor: pointer; font-weight: 700; }
+.ask-queue ol { margin: 6px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; color: var(--text); }
+.ask-queue li { overflow-wrap: anywhere; }
+.ask-queue li.shown { font-weight: 700; }
+.ask-queue li.later { color: var(--muted); }
+.ask-queue .ask-priority { margin-right: 6px; }
 .ask-first-head time { margin-left: auto; font-size: 11px; color: var(--muted); }
 .ask-first-text { margin: 0; font-size: 17px; font-weight: 700; }
 .ask-first .item-options { display: flex; flex-direction: column; gap: 6px; }

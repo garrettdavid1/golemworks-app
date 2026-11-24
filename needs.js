@@ -1,11 +1,14 @@
-// Who answers what on Fleet: the overlords lead with the asks David answers himself; a golem's need goes to its overlord (golemd tells it).
+// Who answers what on Fleet: the overlords lead with the asks the operator answers, with every golem's question (the question queue); a golem's other needs go to its overlord (golemd tells it).
 "use strict";
 
 const Needs = (() => {
   const golemOf = (feed, workshopId, golemId) => feed?.workshops.find((w) => w.id === workshopId)?.golems.find((g) => g.id === golemId) || null;
   const isOverlordAsk = (feed, ask) => ask.golemType === "overlord" || golemOf(feed, ask.workshopId, ask.golemId)?.type === "overlord";
-  // David answers an overlord's own asks, and one no golem holds; a regular golem's ask goes to its overlord first.
-  const forDavid = (feed, ask) => !ask.golemId || isOverlordAsk(feed, ask);
+  // A golem's questions (a menu, a gw ask) wait in the operator's question queue, as on the desktop's Chat.
+  const QUEUED = new Set(["question", "ask"]);
+  const queued = (ask) => QUEUED.has(ask.kind);
+  // The operator answers an overlord's own asks, one no golem holds, and a golem's question; a golem's other needs go to its overlord first.
+  const forDavid = (feed, ask) => !ask.golemId || isOverlordAsk(feed, ask) || queued(ask);
   const open = (ask) => !ask.answeredAt && !ask.snoozedUntil;
 
   /** Each workshop's overlords in rank order with their open asks; its pause and loose asks ride its first overlord's row, or a row of their own. */
@@ -39,10 +42,10 @@ const Needs = (() => {
     const ask = (feed?.asks || []).find((a) => a.workshopId === workshopId && a.golemId === golem.id && open(a));
     const need = golem.needsYou || ask?.question;
     if (!need) return null;
-    return golem.type === "overlord" ? { david: true, text: `Needs you: ${need}` } : { david: false, text: `Waiting on ${overlordName(feed, workshopId)}: ${need}` };
+    return golem.type === "overlord" || (ask && queued(ask)) ? { david: true, text: `Needs you: ${need}` } : { david: false, text: `Waiting on ${overlordName(feed, workshopId)}: ${need}` };
   }
 
-  return { overlordRows, count, line, overlordName, open };
+  return { overlordRows, count, line, overlordName, open, queued };
 })();
 
 if (typeof module !== "undefined") module.exports = Needs;

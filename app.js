@@ -661,7 +661,7 @@
     const subject = ask.golemType === "overlord" ? `${ask.golem} · overlord` : ask.golem;
     const context = AskContext.of(ask);
     return h("article", { class: `item ask ${state === "blocked" ? "attention " : ""}kind-${ask.kind || "unknown"}`, "data-state": state, "data-ask": ask.id }, [
-      h("div", { class: "item-head" }, [h("span", { class: `kind ask ${ask.kind === "gate" ? "gate" : ""}` }, ask.answeredAt ? "Answered" : label), h("span", { class: "who" }, subject || ask.overlord), h("span", {}, ago(ask.at))]),
+      h("div", { class: "item-head" }, [h("span", { class: `kind ask ${ask.kind === "gate" ? "gate" : ""}` }, ask.answeredAt ? "Answered" : label), priorityChip(ask.priority), h("span", { class: `who${ask.golemType === "overlord" ? "" : " from"}` }, [ask.golemType === "overlord" ? subject || ask.overlord : `from ${ask.golem}`, ask.parts ? ` · question ${ask.part + 1} of ${ask.parts}` : ""].join("")), h("span", {}, ago(ask.at))]),
       h("div", { class: "item-text" }, linked(ask.question)),
       AskContext.about(h, context.about),
       ask.detail && !questions ? detailBlock(ask.detail) : null,
@@ -701,7 +701,7 @@
 
   async function snooze(ask, hours) {
     try {
-      await api("POST", `/api/asks/${encodeURIComponent(ask.workshopId)}/${encodeURIComponent(ask.id)}/snooze`, { hours });
+      await api("POST", `/api/asks/${encodeURIComponent(ask.workshopId)}/${encodeURIComponent(ask.askId || ask.id)}/snooze`, { hours });
       toast(`Snoozed ${ask.golem} for ${hours} hours`);
     } catch (error) {
       toast(error.message, true);
@@ -729,7 +729,7 @@
   }
 
   /** The Orchestrator's question over its chat, the conversation dimmed behind it (G-110): an option (with the row's words as its note), words from the row, or Not now; count: how many lead; form, rowKey: the message row. */
-  function askFirstCard(ask, g, { count, form, rowKey }) {
+  function askFirstCard(ask, g, { count, queue = [], form, rowKey }) {
     const askKey = askKeyOf(ask);
     const [label, kindDoes] = KIND[ask.kind] || KIND.unknown;
     const questions = ask.reply ? AskContext.menu(ask) : null;
@@ -738,7 +738,7 @@
     const of = AskFirst.position(count);
     const context = AskContext.of(ask);
     // A question's option or ticks are chosen here and go with the row's Send, its words beside them (one Send, as on the desktop).
-    const choosing = ask.kind === "question" && ask.reply;
+    const choosing = (ask.kind === "question" || ask.kind === "ask") && ask.reply;
     const choose = (next) => {
       drafts.set(askKey, next);
       for (const [n, button] of [...(options?.querySelectorAll(":scope > .option") || [])].entries()) button.setAttribute("aria-pressed", String(next.option === n));
@@ -776,7 +776,9 @@
     } }, "Not now");
     const title = `ask-first-${ask.id}`;
     return h("section", { class: `ask-first${ask.kind === "gate" ? " gate" : ""}`, "data-ask": ask.id, role: "group", "aria-labelledby": title, tabindex: "-1" }, [
-      h("div", { class: "ask-first-head" }, [h("span", { class: `kind ask${ask.kind === "gate" ? " gate" : ""}` }, label), of ? h("span", { class: "ask-first-of" }, of) : null, h("time", { datetime: ask.at }, ago(ask.at))]),
+      h("div", { class: "ask-first-head" }, [h("span", { class: `kind ask${ask.kind === "gate" ? " gate" : ""}` }, label), priorityChip(ask.priority), of ? h("span", { class: "ask-first-of" }, of) : null, h("time", { datetime: ask.at }, ago(ask.at))]),
+      // Who asks (a golem's question names it), and which of a menu's several questions this is.
+      ask.golemType === "overlord" && !ask.parts ? null : h("div", { class: "ask-first-from" }, [ask.golemType === "overlord" ? null : `from ${ask.golem}`, ask.parts ? `question ${ask.part + 1} of ${ask.parts}` : null].filter(Boolean).join(" · ")),
       h("p", { class: "ask-first-text", id: title }, linked(ask.question)),
       AskContext.about(h, context.about),
       ask.detail && !questions ? detailBlock(ask.detail) : null,
@@ -786,6 +788,18 @@
       ...AskContext.after(h, context),
       AskContext.offers(ask, { answerable: true, sealed: sealedWorkshop(ask.workshopId) }) ? AskContext.bare(h, () => askForContext(ask, g), { busy }) : null,
       h("div", { class: "ask-first-actions" }, [atPc, wait].filter(Boolean)),
+      queue.length > 1 ? queueList(queue, ask) : null,
+    ]);
+  }
+
+  /** A priority other than normal, as a chip. */
+  const priorityChip = (priority) => (priority && priority !== "normal" ? h("span", { class: `ask-priority ${priority}` }, priority) : null);
+
+  /** See all: every question waiting, in the queue's order, read without answering (put off ones marked). */
+  function queueList(queue, shown) {
+    return h("details", { class: "ask-queue" }, [
+      h("summary", {}, `See all ${queue.length} waiting`),
+      h("ol", {}, queue.map((a) => h("li", { class: `${a.id === shown.id ? "shown" : ""}${a.waitedAt ? " later" : ""}` }, [priorityChip(a.priority), h("strong", {}, a.golem), " ", a.question, a.waitedAt ? h("em", {}, " · put off") : null]))),
     ]);
   }
 
@@ -797,20 +811,24 @@
     } }, [h("span", { class: "grow" }, AskFirst.barText(waited)), h("span", { class: "chat-waits-open" }, "Answer")]);
   }
 
+  /** An ask's keys here: each of its questions' when the queue splits its menu, else its own. */
+  const partKeys = (ask) => (Number.isInteger(ask.part) ? Array.from({ length: ask.parts }, (_, n) => `${ask.workshopId}:${ask.askId}~${n}`) : [askKeyOf(ask)]);
+
   /** Not now: the Orchestrator hears David says wait (golemd types it a note and keeps the ask open), the block lifts, and the ask waits in the bar. */
   async function notNow(ask, g) {
-    const askKey = askKeyOf(ask);
+    const holdHere = () => {
+      for (const key of partKeys(ask)) {
+        heldAsks.add(key);
+        reopenedAsks.delete(key);
+      }
+    };
     try {
-      await api("POST", `/api/asks/${encodeURIComponent(ask.workshopId)}/${encodeURIComponent(ask.id)}/wait`);
-      // Put off on this phone at once; the feed's waitedAt follows with the next summary.
-      heldAsks.add(askKey);
-      reopenedAsks.delete(askKey);
+      await api("POST", `/api/asks/${encodeURIComponent(ask.workshopId)}/${encodeURIComponent(ask.askId || ask.id)}/wait`);
+      // Put off on this phone at once (each question of its menu); the feed's waitedAt follows with the next summary.
+      holdHere();
     } catch (error) {
       // No word from the workshop (an older golemd, a dropped socket): put off here so he is not held, and told the Orchestrator may not know.
-      if (error.status === 504) {
-        heldAsks.add(askKey);
-        reopenedAsks.delete(askKey);
-      }
+      if (error.status === 504) holdHere();
       toast(error.message, true);
     }
     await load();
@@ -823,7 +841,7 @@
   /** Ask for context on a bare question: golemd has the golem ask it again with its context, and the new question comes in its place. */
   async function askForContext(ask, g = null) {
     try {
-      await api("POST", `/api/asks/${encodeURIComponent(ask.workshopId)}/${encodeURIComponent(ask.id)}/context`);
+      await api("POST", `/api/asks/${encodeURIComponent(ask.workshopId)}/${encodeURIComponent(ask.askId || ask.id)}/context`);
       toast("Asked for its context; the new question comes in its place");
     } catch (error) {
       toast(error.message, true);
@@ -913,13 +931,15 @@
         const acts = await sealerFor(ask.workshopId);
         const ids = await uploadAttached(files, ask.workshopId, acts);
         const label = body.option !== undefined ? { label: ask.options[body.option] } : {};
-        const payload = acts ? sealedBody(acts, ask.workshopId, "answer", { askId: ask.id, golemId: ask.golemId, ...body, ...label }, files, ids) : { ...body, ...(ids.length ? { attachments: ids } : {}) };
-        return api("POST", `/api/asks/${encodeURIComponent(ask.workshopId)}/${encodeURIComponent(ask.id)}/answer`, payload);
+        // One question of a several-question menu: golemd holds its answer until the last (part).
+        const part = Number.isInteger(ask.part) ? { part: ask.part } : {};
+        const payload = acts ? sealedBody(acts, ask.workshopId, "answer", { askId: ask.askId || ask.id, golemId: ask.golemId, ...body, ...label, ...part }, files, ids) : { ...body, ...part, ...(ids.length ? { attachments: ids } : {}) };
+        return api("POST", `/api/asks/${encodeURIComponent(ask.workshopId)}/${encodeURIComponent(ask.askId || ask.id)}/answer`, payload);
       });
       drafts.delete(key);
       await keepSent(out.said, attached.get(files));
       clearAttached(files);
-      toast(sentNote(out, ask.golem));
+      toast(out.saved ? `Saved; it goes to ${ask.golem} with the other answers (${out.left ?? "more"} to answer)` : sentNote(out, ask.golem));
       // Until golemd closes it, the chat does not lead with it again (G-110).
       answeredAsks.set(askKeyOf(ask), new Date().toISOString());
       sent = true;
@@ -1284,7 +1304,7 @@
   const needCount = () => Needs.count(feed);
   const overlordOf = (g) => Needs.overlordName(feed, g.workshopId);
 
-  /** An overlord needing David: its card, tap the top for its sheet, then its paused workshop and every open ask with their controls. */
+  /** An overlord needing the operator: its card, tap the top for its sheet, then its paused workshop and its question queue's first ask with its controls (See all for the rest). */
   function needCard(g, asks, paused = null, updateFailed = null) {
     const gate = !paused && !updateFailed && asks.every((a) => a.kind === "gate");
     const node = h("article", { class: `card need attention${gate ? " gate" : ""}${g.type === "overlord" ? " overlord orchestrator" : ""}`, "data-state": gate || (paused && !updateFailed && !asks.length) ? "waiting" : "blocked", "data-pane": g.name }, [
@@ -1295,10 +1315,30 @@
       ]),
       ...(paused ? [pausedItem(paused)] : []),
       ...(updateFailed ? [updateFailedItem(updateFailed)] : []),
-      ...asks.map(askBody),
+      ...queueBody(g, asks),
     ]);
     return withGolem(node, g);
   }
+
+  /** One question at a time (the question queue): the first, or the one with a pick or words on it, then the rest under See all. */
+  function queueBody(g, asks) {
+    if (!asks.length) return [];
+    const items = AskFirst.queue(asks, { workspaces: queueSpaces(g.workshopId) });
+    const lead = items.find((a) => startedOn(`${a.workshopId}:${a.id}`)) || items[0];
+    return [askBody(lead), items.length > 1 ? queueList(items, lead) : null].filter(Boolean);
+  }
+
+  /** An overlord's open questions as its card and sheet show them: its own and its workshop's golems' (chatAsks), not answered or snoozed. */
+  const queuedOn = (g) => chatAsks(g).filter(Needs.open);
+
+  /** A draft with a pick, a tick or words on it: the operator is mid-answer there. */
+  const startedOn = (key) => {
+    const draft = drafts.get(key);
+    return Number.isInteger(draft?.option) || Boolean(draft?.picks?.some((p) => p?.length)) || Boolean(draft?.text?.trim());
+  };
+
+  /** A workshop's workspaces in the summary's order, which the queue sorts by. */
+  const queueSpaces = (workshopId) => (feed?.workshops?.find((w) => w.id === workshopId)?.workspaces || []).map((w) => (typeof w === "string" ? w : w?.name)).filter(Boolean);
 
   /** A push's link (#fleet&golem=<workshop>/<golem>[&sheet=1]): once the feed has the golem, its card scrolls into view or its sheet opens. */
   function showFocus() {
@@ -1407,7 +1447,7 @@
       e.preventDefault();
       if (answering) {
         // Settled elsewhere since the sheet drew (the desktop, a snooze): not sent, and the words stay in the box.
-        const ask = asksOf(g).find((a) => a.id === answering.id);
+        const ask = chatQueue(g).find((a) => a.id === answering.id);
         if (!ask || !canAnswer(ask)) {
           toast("That need was settled elsewhere; your words are still in the box", true);
           return openGolem(g);
@@ -1453,7 +1493,8 @@
     // Options only: the box waits, so no plain message slips past the question.
     const pickOnly = Boolean(lead && !answering);
     if (offline || pickOnly) box.disabled = true;
-    const takesFiles = !offline && !g.namesOnly && !pickOnly;
+    // One question of a several-question menu takes no files: they go with a reply.
+    const takesFiles = !offline && !g.namesOnly && !pickOnly && !Number.isInteger(answering?.part);
     if (quiet) {
       // A chat's composer: + to attach, the words, a round Send; picked files show above the row.
       const attach = takesFiles ? attachBar(key, { plus: true }) : null;
@@ -1477,7 +1518,7 @@
     if (!offline && !g.namesOnly && !answering && !pickOnly && sealed && typeof SlashCommands !== "undefined") slash = SlashCommands.attach(box, { load: () => commandsOf(g), place: quiet ? form.querySelector(".chat-composer") : box.nextSibling });
     // The chat ends at its message row: the feed shows what was sent, so no thread under it. Over the row: the leading question, else the bar for put-off ones and any need it cannot answer.
     if (quiet) {
-      if (lead) return [askFirstCard(lead, g, { count: split.lead.length, form, rowKey: key }), form];
+      if (lead) return [askFirstCard(lead, g, { count: split.lead.length, queue: [...split.lead, ...split.waited], form, rowKey: key }), form];
       const waits = split?.waited.length ? waitsBar(split.waited, g) : null;
       return [waits || split?.rest.length ? h("div", { class: "chat-needs", role: "region", "aria-label": "Needs you" }, [waits, ...(split?.rest || []).map((a) => chatNeed(a, g))].filter(Boolean)) : null, form].filter(Boolean);
     }
@@ -1511,14 +1552,33 @@
   const answeredAsks = new Map(); // ask key -> when this phone answered it
   const landedAsks = new Set();
   /** The chat's asks (public/ask-first.js): lead blocks the chat, oldest first; waited sit in the bar; rest show as today, one answered here as answered. */
-  const askSplit = (asks) => AskFirst.split(asks.map((a) => (answeredAsks.has(askKeyOf(a)) && !a.answeredAt ? { ...a, answeredAt: answeredAsks.get(askKeyOf(a)) } : a)), { canAnswer, keyOf: askKeyOf, held: heldAsks, reopened: reopenedAsks });
+  const askSplit = (asks, { first = null } = {}) => AskFirst.split(asks.map((a) => (answeredAsks.has(askKeyOf(a)) && !a.answeredAt ? { ...a, answeredAt: answeredAsks.get(askKeyOf(a)) } : a)), { canAnswer, keyOf: askKeyOf, held: heldAsks, reopened: reopenedAsks, first });
+  /** The Orchestrator's chat holds the operator's question queue: its own asks, and every golem's question in its workshop (on its first overlord's chat). */
+  function chatAsks(g) {
+    const own = asksOf(g);
+    if (g.type !== "overlord") return own;
+    const lead = feed?.workshops?.find((w) => w.id === g.workshopId)?.golems.find((x) => x.type === "overlord");
+    if (lead?.id !== g.golemId) return own;
+    const lords = new Set(feed.workshops.find((w) => w.id === g.workshopId).golems.filter((x) => x.type === "overlord").map((x) => x.id));
+    return [...own, ...(feed?.asks || []).filter((a) => a.workshopId === g.workshopId && !lords.has(a.golemId) && Needs.queued(a))];
+  }
+  /** The chat's questions in the queue's order (public/ask-first.js queue), as golemd orders Chat's. */
+  const chatQueue = (g) => AskFirst.queue(chatAsks(g), { workspaces: queueSpaces(g.workshopId) });
+  // The question each chat led with, so one the operator is mid-answer on keeps the card (a pick, a tick, or words in the row).
+  const ledWith = new Map();
+  const midAnswer = (g) => {
+    const key = ledWith.get(quietKey(g));
+    const draft = key && drafts.get(key);
+    return key && (Number.isInteger(draft?.option) || draft?.picks?.some((p) => p?.length) || drafts.get(`message:${g.workshopId}/${g.golemId}`)?.text?.trim()) ? key : null;
+  };
   /** Marks for asks no longer in the feed go, so one asked again word for word leads again. */
   function pruneAskMarks() {
     const live = new Set((feed?.asks || []).map(askKeyOf));
-    for (const marks of [heldAsks, reopenedAsks, answeredAsks]) for (const key of [...marks.keys()]) if (!live.has(key)) marks.delete(key);
+    // A queue item of a several-question menu is keyed "<ask>~<n>": it lives while its ask does.
+    for (const marks of [heldAsks, reopenedAsks, answeredAsks]) for (const key of [...marks.keys()]) if (!live.has(key.replace(/~\d$/, ""))) marks.delete(key);
   }
   // The chat's needs as drawn, so a refresh that changes them draws the sheet again.
-  const needsMark = (g) => asksOf(g).map((a) => `${a.id}:${a.answeredAt || ""}:${a.waitedAt || ""}:${answeredAsks.has(askKeyOf(a))}:${a.online === false}:${Boolean(a.stale)}`).join("|");
+  const needsMark = (g) => chatAsks(g).map((a) => `${a.id}:${(a.heldParts || []).join(".")}:${a.answeredAt || ""}:${a.waitedAt || ""}:${answeredAsks.has(askKeyOf(a))}:${a.online === false}:${Boolean(a.stale)}`).join("|");
 
   /** The Orchestrator's Quiet feed opened for its sheet, or null: not the overlord, names only, a plaintext workshop (it never sends one), none or an empty one, or no key. */
   async function loadQuiet(g) {
@@ -1787,8 +1847,9 @@
     const marks = { done: "✓", current: "▸", pending: "·" };
     const asks = asksOf(g);
     const parts = QuietChat.sheetParts(Boolean(quiet));
-    // The Orchestrator's question leads its chat and blocks the conversation until answered or put off (G-110).
-    const split = parts.chat ? askSplit(asks) : null;
+    // The queue's first question leads the Orchestrator's chat and blocks the conversation until answered or put off (G-110); one mid-answer stays.
+    const split = parts.chat ? askSplit(chatQueue(g), { first: midAnswer(g) }) : null;
+    if (split) ledWith.set(quietKey(g), split.lead[0] ? askKeyOf(split.lead[0]) : null);
     const asking = Boolean(split?.lead.length);
     // The open chat's own panel carries over a redraw of its sheet (a need came or went, a send): its place and photos stay (G-108).
     const was = document.getElementById("sheet-quiet");
@@ -1807,8 +1868,8 @@
       ...(parts.chat ? [g.needsYou && !asks.length ? h("p", { class: "card-attention chat-attention" }, ["Needs you: ", ...linked(g.needsYou)]) : null]
         : g.type === "overlord"
         ? [g.needsYou ? h("p", { class: "card-attention" }, ["Needs you: ", ...linked(g.needsYou)]) : null,
-          // A sheet opened from a push leads with what the overlord asks, to answer here as on its card.
-          ...(asks.length ? [h("h3", {}, "Needs you"), h("div", { class: "stack" }, asks.map(askItem))] : [])]
+          // A sheet opened from a push leads with the question queue's first, to answer here as on its card (See all for the rest).
+          ...(queuedOn(g).length ? [h("h3", {}, "Needs you"), h("div", { class: "stack" }, queueBody(g, queuedOn(g)))] : [])]
         // A golem's needs went to its overlord: its controls stay here as a fallback, under the overlord's name.
         : [g.needsYou ? h("p", { class: "card-status" }, [`Waiting on ${overlordOf(g)}: `, ...linked(g.needsYou)]) : null,
           ...(asks.length ? [h("h3", {}, `Asked of ${overlordOf(g)}`), h("p", { class: "note" }, `${overlordOf(g)} handles this or asks you. Answer here only if it can't.`), h("div", { class: "stack" }, asks.map(askItem))] : [])]),
