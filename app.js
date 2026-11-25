@@ -1004,7 +1004,7 @@
   };
   snap("page load");
   voices?.addEventListener?.("voiceschanged", () => snap("voiceschanged"));
-  // This phone's choice (Settings > This device > Voice); empty is Automatic, which prefers Evan (Enhanced). A later "voice source" (phone or ElevenLabs, G-172) slots in at readAloud.
+  // This phone's choice (Settings > This device > Voice); empty is iPhone default, which sets no voice: iOS speaks with its Spoken Content voice, downloaded ones included. A later "voice source" (phone or ElevenLabs, G-172) slots in at readAloud.
   const VOICE_KEY = "gwh-voice";
   const savedVoice = () => {
     try {
@@ -1013,7 +1013,7 @@
       return "";
     }
   };
-  const pickVoice = () => book.resolve(voices.getVoices(), savedVoice(), navigator.language);
+  const pickVoice = () => book.resolve(voices.getVoices(), savedVoice());
   const readTexts = new Map(); // key -> { text, who }: what each drawn Listen row reads, so it can be drawn again in place
 
   /** Listen, then Pause or Resume while it reads, and Stop beside it. Drawn from the reading state, so a refresh keeps it. */
@@ -1055,7 +1055,7 @@
       said.onerror = (e) => e.error !== "interrupted" && e.error !== "canceled" && over();
       voices.speak(said);
     });
-    snap(`Listen: wanted ${parts.length ? pickVoice()?.name : "-"}, saved "${savedVoice()}"`);
+    snap(`Listen: wanted ${pickVoice()?.name || "iPhone default"}, saved "${savedVoice()}"`);
     setTimeout(() => snap("Listen +2s"), 2000);
     redrawReading();
   }
@@ -1077,26 +1077,24 @@
     }
   }
 
-  /** The Settings voice picker: every English voice this phone reports, Automatic first; a change reads a sample so it can be heard. */
+  /** The Settings voice picker: iPhone default first, then every English voice this phone reports; a change reads a sample so it can be heard. */
   function voiceRow() {
     if (!voices) return null;
     const select = h("select", { "aria-label": "Voice", class: "voice-pick", onchange: (e) => setVoice(e.target.value) });
     const fill = () => {
       book.note(voices.getVoices());
       const list = Speech.pickerVoices(book.all());
-      const auto = Speech.chooseVoice(book.all(), "", navigator.language);
-      select.replaceChildren(h("option", { value: "" }, `Automatic${auto ? ` (${auto.name})` : ""}`), ...list.map((v) => h("option", { value: v.name }, v.name)));
+      select.replaceChildren(h("option", { value: "" }, "iPhone default"), ...list.map((v) => h("option", { value: v.name }, v.name)));
       select.value = list.some((v) => v.name === savedVoice()) ? savedVoice() : "";
     };
     fill();
     voices.addEventListener?.("voiceschanged", () => select.isConnected && fill());
     document.addEventListener("gwh-voicelog", () => select.isConnected && fill());
-    const hasEvan = book.all().some((v) => v.name === Speech.PREFERRED);
     const log = h("pre", { class: "note voice-log" }, voiceLog.join("\n\n"));
     document.addEventListener("gwh-voicelog", () => log.isConnected && (log.textContent = voiceLog.join("\n\n")));
     return h("div", { class: "stack" }, [
       h("div", { class: "row" }, [h("div", { class: "grow voice-label" }, [h("span", { class: "rank-name" }, "Voice")]), select]),
-      h("p", { class: "note" }, hasEvan ? "Spoken by this Mobile, nothing leaves it." : `${Speech.PREFERRED} is not on this Mobile yet. Download it in iOS Settings > Accessibility > Spoken Content > Voices > English > Evan > Enhanced, then reopen Golemworks.`),
+      h("p", { class: "note" }, "iPhone default uses the voice chosen in iOS Settings > Accessibility > Spoken Content."),
       h("details", {}, [h("summary", { class: "note" }, "Voices this Mobile reports"), log]),
     ]);
   }

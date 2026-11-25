@@ -30,30 +30,6 @@ const Speech = (() => {
     return out;
   }
 
-  /** The most natural English voice on offer: Premium, then Enhanced, then Siri, in the phone's own English first. */
-  function bestVoice(voices, language = "en-US") {
-    const want = String(language).toLowerCase().replace("_", "-");
-    const score = (v) => {
-      const lang = String(v.lang || "").toLowerCase().replace("_", "-");
-      if (!lang.startsWith("en") || NOVELTY.test(v.name)) return -1;
-      return (/premium/i.test(v.name) ? 8 : 0) + (/enhanced/i.test(v.name) ? 4 : 0) + (/siri/i.test(v.name) ? 2 : 0) + (lang === want ? 1 : 0) + (v.default ? 0.5 : 0);
-    };
-    const best = [...(voices || [])].map((v) => [score(v), v]).filter(([s]) => s >= 0).sort((a, b) => b[0] - a[0])[0];
-    return best ? best[1] : null;
-  }
-
-  /** The voice David asked for by name: "Evan (Enhanced)" until he picks another; Evan in any quality when only that is installed. */
-  const PREFERRED = "Evan (Enhanced)";
-
-  /** The saved voice if the phone still lists it, else Evan (Enhanced), else Evan in another quality, else bestVoice. */
-  function chooseVoice(voices, saved, language = "en-US") {
-    const list = [...(voices || [])];
-    const named = (name) => list.find((v) => v.name === name);
-    if (saved && named(saved)) return named(saved);
-    const evan = list.filter((v) => /^evan( |$)/i.test(v.name));
-    return evan.find((v) => /enhanced|premium/i.test(v.name)) || evan[0] || bestVoice(list, language);
-  }
-
   /** Every voice the phone has ever listed this session, by name: iOS can list fewer after the first read, and a voice once seen stays on offer. */
   function voiceBook() {
     const seen = new Map();
@@ -63,11 +39,10 @@ const Speech = (() => {
         return list;
       },
       all: () => [...seen.values()],
-      /** The voice object to speak with: the phone's fresh one for that name when it lists it, else the one seen before. */
-      resolve(fresh, saved, language) {
+      /** The voice picked by name (the phone's fresh object when it lists it); null for iPhone default: set no voice and no lang, and iOS uses its own. */
+      resolve(fresh, saved) {
         this.note(fresh);
-        const pick = chooseVoice(this.all(), saved, language);
-        return pick ? [...(fresh || [])].find((v) => v.name === pick.name) || pick : null;
+        return (saved && ([...(fresh || [])].find((v) => v.name === saved) || seen.get(saved))) || null;
       },
     };
   }
@@ -86,7 +61,7 @@ const Speech = (() => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  return { sayable, pieces, bestVoice, chooseVoice, voiceBook, describeVoices, pickerVoices, PREFERRED };
+  return { sayable, pieces, voiceBook, describeVoices, pickerVoices };
 })();
 
 if (typeof module !== "undefined") module.exports = Speech;
