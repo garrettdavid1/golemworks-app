@@ -992,8 +992,18 @@
   // The phone's own voice (Web Speech): nothing leaves the phone, no service, no cost. One reply reads at a time.
   const voices = typeof speechSynthesis !== "undefined" ? speechSynthesis : null;
   let reading = null; // { key, paused } while a reply is being read
-  let voice;
-  voices?.addEventListener?.("voiceschanged", () => voice && (voice = Speech.keepVoice(voice, voices.getVoices(), savedVoice(), navigator.language)));
+  const book = Speech.voiceBook();
+  const voiceLog = [];
+  const snap = (when) => {
+    if (!voices) return;
+    const list = voices.getVoices();
+    book.note(list);
+    voiceLog.push(Speech.describeVoices(`${new Date().toLocaleTimeString()} ${when}`, list));
+    if (voiceLog.length > 12) voiceLog.shift();
+    document.dispatchEvent(new Event("gwh-voicelog"));
+  };
+  snap("page load");
+  voices?.addEventListener?.("voiceschanged", () => snap("voiceschanged"));
   // This phone's choice (Settings > This device > Voice); empty is Automatic, which prefers Evan (Enhanced). A later "voice source" (phone or ElevenLabs, G-172) slots in at readAloud.
   const VOICE_KEY = "gwh-voice";
   const savedVoice = () => {
@@ -1003,7 +1013,7 @@
       return "";
     }
   };
-  const pickVoice = () => (voice = Speech.keepVoice(voice, voices.getVoices(), savedVoice(), navigator.language));
+  const pickVoice = () => book.resolve(voices.getVoices(), savedVoice(), navigator.language);
   const readTexts = new Map(); // key -> { text, who }: what each drawn Listen row reads, so it can be drawn again in place
 
   /** Listen, then Pause or Resume while it reads, and Stop beside it. Drawn from the reading state, so a refresh keeps it. */
@@ -1044,6 +1054,8 @@
       said.onerror = (e) => e.error !== "interrupted" && e.error !== "canceled" && over();
       voices.speak(said);
     });
+    snap(`Listen: wanted ${parts.length ? pickVoice()?.name : "-"}, saved "${savedVoice()}"`);
+    setTimeout(() => snap("Listen +2s"), 2000);
     redrawReading();
   }
 
@@ -1069,17 +1081,22 @@
     if (!voices) return null;
     const select = h("select", { "aria-label": "Voice", class: "voice-pick", onchange: (e) => setVoice(e.target.value) });
     const fill = () => {
-      const list = Speech.pickerVoices(voices.getVoices());
-      const auto = Speech.chooseVoice(voices.getVoices(), "", navigator.language);
+      book.note(voices.getVoices());
+      const list = Speech.pickerVoices(book.all());
+      const auto = Speech.chooseVoice(book.all(), "", navigator.language);
       select.replaceChildren(h("option", { value: "" }, `Automatic${auto ? ` (${auto.name})` : ""}`), ...list.map((v) => h("option", { value: v.name }, v.name)));
       select.value = list.some((v) => v.name === savedVoice()) ? savedVoice() : "";
     };
     fill();
     voices.addEventListener?.("voiceschanged", () => select.isConnected && fill());
-    const hasEvan = voices.getVoices().some((v) => v.name === Speech.PREFERRED);
+    document.addEventListener("gwh-voicelog", () => select.isConnected && fill());
+    const hasEvan = book.all().some((v) => v.name === Speech.PREFERRED);
+    const log = h("pre", { class: "note voice-log" }, voiceLog.join("\n\n"));
+    document.addEventListener("gwh-voicelog", () => log.isConnected && (log.textContent = voiceLog.join("\n\n")));
     return h("div", { class: "stack" }, [
       h("div", { class: "row" }, [h("div", { class: "grow voice-label" }, [h("span", { class: "rank-name" }, "Voice")]), select]),
       h("p", { class: "note" }, hasEvan ? "Spoken by this Mobile, nothing leaves it." : `${Speech.PREFERRED} is not on this Mobile yet. Download it in iOS Settings > Accessibility > Spoken Content > Voices > English > Evan > Enhanced, then reopen Golemworks.`),
+      h("details", {}, [h("summary", { class: "note" }, "Voices this Mobile reports"), log]),
     ]);
   }
 
@@ -1088,7 +1105,6 @@
       if (name) localStorage.setItem(VOICE_KEY, name);
       else localStorage.removeItem(VOICE_KEY);
     } catch {}
-    voice = undefined;
     readAloud("voice-sample", "This is how Listen will sound.");
   }
 

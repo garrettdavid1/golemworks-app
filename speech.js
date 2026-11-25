@@ -54,15 +54,29 @@ const Speech = (() => {
     return evan.find((v) => /enhanced|premium/i.test(v.name)) || evan[0] || bestVoice(list, language);
   }
 
-  /** The voice to use now. A voice already in use stays unless the phone's fresh list names a better answer: iOS refires voiceschanged after the first read, and that list can come back without Evan or empty, which must not drop him. */
-  function keepVoice(current, voices, saved, language = "en-US") {
-    const fresh = chooseVoice(voices, saved, language);
-    if (!current) return fresh;
-    const list = [...(voices || [])];
-    const wantsEvan = !saved && /^evan( |$)/i.test(current.name);
-    if (wantsEvan && !list.some((v) => /^evan( |$)/i.test(v.name))) return current;
-    if (saved && current.name === saved && !list.some((v) => v.name === saved)) return current;
-    return fresh || current;
+  /** Every voice the phone has ever listed this session, by name: iOS can list fewer after the first read, and a voice once seen stays on offer. */
+  function voiceBook() {
+    const seen = new Map();
+    return {
+      note(list) {
+        for (const v of list || []) if (v && v.name) seen.set(v.name, v);
+        return list;
+      },
+      all: () => [...seen.values()],
+      /** The voice object to speak with: the phone's fresh one for that name when it lists it, else the one seen before. */
+      resolve(fresh, saved, language) {
+        this.note(fresh);
+        const pick = chooseVoice(this.all(), saved, language);
+        return pick ? [...(fresh || [])].find((v) => v.name === pick.name) || pick : null;
+      },
+    };
+  }
+
+  /** One snapshot of what the phone reports, English entries in full, as lines for Settings. */
+  function describeVoices(when, list) {
+    const all = [...(list || [])];
+    const en = all.filter((v) => String(v.lang || "").toLowerCase().startsWith("en"));
+    return [`${when}: ${all.length} voices, ${en.length} English`, ...en.map((v) => `  ${v.name} | ${v.lang} | ${v.voiceURI} | ${v.localService ? "local" : "network"}${v.default ? " | default" : ""}`)].join("\n");
   }
 
   /** Voices for the Settings picker: English first, novelty voices out, the rest by name. */
@@ -72,7 +86,7 @@ const Speech = (() => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  return { sayable, pieces, bestVoice, chooseVoice, keepVoice, pickerVoices, PREFERRED };
+  return { sayable, pieces, bestVoice, chooseVoice, voiceBook, describeVoices, pickerVoices, PREFERRED };
 })();
 
 if (typeof module !== "undefined") module.exports = Speech;

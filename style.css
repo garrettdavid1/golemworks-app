@@ -589,3 +589,4 @@ a.task-email { display: inline-flex; align-items: center; min-height: 36px; padd
 /* Settings > This device > Voice: a long voice name never squeezes the label away. */
 .voice-label { flex: none !important; }
 .voice-pick { flex: 1; min-width: 0; max-width: 70%; }
+.voice-log { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; user-select: text; }
