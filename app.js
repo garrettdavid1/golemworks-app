@@ -993,7 +993,7 @@
   const voices = typeof speechSynthesis !== "undefined" ? speechSynthesis : null;
   let reading = null; // { key, paused } while a reply is being read
   let voice;
-  voices?.addEventListener?.("voiceschanged", () => (voice = undefined));
+  voices?.addEventListener?.("voiceschanged", () => voice && (voice = Speech.keepVoice(voice, voices.getVoices(), savedVoice(), navigator.language)));
   // This phone's choice (Settings > This device > Voice); empty is Automatic, which prefers Evan (Enhanced). A later "voice source" (phone or ElevenLabs, G-172) slots in at readAloud.
   const VOICE_KEY = "gwh-voice";
   const savedVoice = () => {
@@ -1003,7 +1003,7 @@
       return "";
     }
   };
-  const pickVoice = () => (voice === undefined ? (voice = Speech.chooseVoice(voices.getVoices(), savedVoice(), navigator.language)) : voice);
+  const pickVoice = () => (voice = Speech.keepVoice(voice, voices.getVoices(), savedVoice(), navigator.language));
   const readTexts = new Map(); // key -> { text, who }: what each drawn Listen row reads, so it can be drawn again in place
 
   /** Listen, then Pause or Resume while it reads, and Stop beside it. Drawn from the reading state, so a refresh keeps it. */
@@ -1079,7 +1079,7 @@
     const hasEvan = voices.getVoices().some((v) => v.name === Speech.PREFERRED);
     return h("div", { class: "stack" }, [
       h("div", { class: "row" }, [h("div", { class: "grow voice-label" }, [h("span", { class: "rank-name" }, "Voice")]), select]),
-      h("p", { class: "note" }, hasEvan ? "Spoken by this phone, nothing leaves it." : `${Speech.PREFERRED} is not on this phone yet. Download it in iOS Settings > Accessibility > Spoken Content > Voices > English > Evan > Enhanced, then reopen Golemworks.`),
+      h("p", { class: "note" }, hasEvan ? "Spoken by this Mobile, nothing leaves it." : `${Speech.PREFERRED} is not on this Mobile yet. Download it in iOS Settings > Accessibility > Spoken Content > Voices > English > Evan > Enhanced, then reopen Golemworks.`),
     ]);
   }
 

@@ -54,6 +54,17 @@ const Speech = (() => {
     return evan.find((v) => /enhanced|premium/i.test(v.name)) || evan[0] || bestVoice(list, language);
   }
 
+  /** The voice to use now. A voice already in use stays unless the phone's fresh list names a better answer: iOS refires voiceschanged after the first read, and that list can come back without Evan or empty, which must not drop him. */
+  function keepVoice(current, voices, saved, language = "en-US") {
+    const fresh = chooseVoice(voices, saved, language);
+    if (!current) return fresh;
+    const list = [...(voices || [])];
+    const wantsEvan = !saved && /^evan( |$)/i.test(current.name);
+    if (wantsEvan && !list.some((v) => /^evan( |$)/i.test(v.name))) return current;
+    if (saved && current.name === saved && !list.some((v) => v.name === saved)) return current;
+    return fresh || current;
+  }
+
   /** Voices for the Settings picker: English first, novelty voices out, the rest by name. */
   function pickerVoices(voices) {
     return [...(voices || [])]
@@ -61,7 +72,7 @@ const Speech = (() => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  return { sayable, pieces, bestVoice, chooseVoice, pickerVoices, PREFERRED };
+  return { sayable, pieces, bestVoice, chooseVoice, keepVoice, pickerVoices, PREFERRED };
 })();
 
 if (typeof module !== "undefined") module.exports = Speech;
