@@ -42,7 +42,26 @@ const Speech = (() => {
     return best ? best[1] : null;
   }
 
-  return { sayable, pieces, bestVoice };
+  /** The voice David asked for by name: "Evan (Enhanced)" until he picks another; Evan in any quality when only that is installed. */
+  const PREFERRED = "Evan (Enhanced)";
+
+  /** The saved voice if the phone still lists it, else Evan (Enhanced), else Evan in another quality, else bestVoice. */
+  function chooseVoice(voices, saved, language = "en-US") {
+    const list = [...(voices || [])];
+    const named = (name) => list.find((v) => v.name === name);
+    if (saved && named(saved)) return named(saved);
+    const evan = list.filter((v) => /^evan( |$)/i.test(v.name));
+    return evan.find((v) => /enhanced|premium/i.test(v.name)) || evan[0] || bestVoice(list, language);
+  }
+
+  /** Voices for the Settings picker: English first, novelty voices out, the rest by name. */
+  function pickerVoices(voices) {
+    return [...(voices || [])]
+      .filter((v) => String(v.lang || "").toLowerCase().startsWith("en") && !NOVELTY.test(v.name))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  return { sayable, pieces, bestVoice, chooseVoice, pickerVoices, PREFERRED };
 })();
 
 if (typeof module !== "undefined") module.exports = Speech;

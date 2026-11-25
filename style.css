@@ -586,3 +586,6 @@ a.task-email { display: inline-flex; align-items: center; min-height: 36px; padd
 /* Keyboard open: the sheet fills what it leaves, and the row sits on it (the keyboard covers the home indicator). */
 .sheet.keyboard > .chat-sheet { height: calc(100% - 8px); max-height: none; padding-bottom: 8px; border-radius: 12px 12px 0 0; }
 
+/* Settings > This device > Voice: a long voice name never squeezes the label away. */
+.voice-label { flex: none !important; }
+.voice-pick { flex: 1; min-width: 0; max-width: 70%; }

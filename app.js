@@ -994,11 +994,22 @@
   let reading = null; // { key, paused } while a reply is being read
   let voice;
   voices?.addEventListener?.("voiceschanged", () => (voice = undefined));
-  const pickVoice = () => (voice === undefined ? (voice = Speech.bestVoice(voices.getVoices(), navigator.language)) : voice);
+  // This phone's choice (Settings > This device > Voice); empty is Automatic, which prefers Evan (Enhanced). A later "voice source" (phone or ElevenLabs, G-172) slots in at readAloud.
+  const VOICE_KEY = "gwh-voice";
+  const savedVoice = () => {
+    try {
+      return localStorage.getItem(VOICE_KEY) || "";
+    } catch {
+      return "";
+    }
+  };
+  const pickVoice = () => (voice === undefined ? (voice = Speech.chooseVoice(voices.getVoices(), savedVoice(), navigator.language)) : voice);
+  const readTexts = new Map(); // key -> { text, who }: what each drawn Listen row reads, so it can be drawn again in place
 
   /** Listen, then Pause or Resume while it reads, and Stop beside it. Drawn from the reading state, so a refresh keeps it. */
   function readControls(key, text, who) {
     if (!voices || !Speech.sayable(text)) return null;
+    readTexts.set(key, { text, who });
     const on = reading?.key === key;
     const label = !on ? "▶ Listen" : reading.paused ? "▶ Resume" : "❚❚ Pause";
     return h("div", { class: "read-row", "data-read": key }, [
@@ -1045,11 +1056,40 @@
   /** Each reply's controls drawn again in place, wherever they show. */
   function redrawReading() {
     for (const row of document.querySelectorAll("[data-read]")) {
-      const words = row.closest("li")?.querySelector(".words")?.textContent || "";
-      const who = row.closest("li")?.querySelector(".speaker")?.textContent || "it";
+      const known = readTexts.get(row.dataset.read);
+      const words = known?.text ?? (row.closest("li")?.querySelector(".words")?.textContent || "");
+      const who = known?.who ?? (row.closest("li")?.querySelector(".speaker")?.textContent || "it");
       const next = readControls(row.dataset.read, words, who);
       if (next) row.replaceWith(next);
     }
+  }
+
+  /** The Settings voice picker: every English voice this phone reports, Automatic first; a change reads a sample so it can be heard. */
+  function voiceRow() {
+    if (!voices) return null;
+    const select = h("select", { "aria-label": "Voice", class: "voice-pick", onchange: (e) => setVoice(e.target.value) });
+    const fill = () => {
+      const list = Speech.pickerVoices(voices.getVoices());
+      const auto = Speech.chooseVoice(voices.getVoices(), "", navigator.language);
+      select.replaceChildren(h("option", { value: "" }, `Automatic${auto ? ` (${auto.name})` : ""}`), ...list.map((v) => h("option", { value: v.name }, v.name)));
+      select.value = list.some((v) => v.name === savedVoice()) ? savedVoice() : "";
+    };
+    fill();
+    voices.addEventListener?.("voiceschanged", () => select.isConnected && fill());
+    const hasEvan = voices.getVoices().some((v) => v.name === Speech.PREFERRED);
+    return h("div", { class: "stack" }, [
+      h("div", { class: "row" }, [h("div", { class: "grow voice-label" }, [h("span", { class: "rank-name" }, "Voice")]), select]),
+      h("p", { class: "note" }, hasEvan ? "Spoken by this phone, nothing leaves it." : `${Speech.PREFERRED} is not on this phone yet. Download it in iOS Settings > Accessibility > Spoken Content > Voices > English > Evan > Enhanced, then reopen Golemworks.`),
+    ]);
+  }
+
+  function setVoice(name) {
+    try {
+      if (name) localStorage.setItem(VOICE_KEY, name);
+      else localStorage.removeItem(VOICE_KEY);
+    } catch {}
+    voice = undefined;
+    readAloud("voice-sample", "This is how Listen will sound.");
   }
 
   // iOS pauses a page's speech when the app goes to the background or the screen locks; it picks up again on return.
@@ -1624,6 +1664,7 @@
       // A photo this phone kept shows as its thumbnail; a file sent from another device, by name.
       b.files ? h("div", { class: "bubble-files" }, sentFiles({ id: b.said?.id ?? "feed", files: b.files })) : null,
       b.text.trim() ? bubbleText(b.text) : null,
+      b.side === "them" ? readControls(`chat:${b.at}|${b.text.length}`, b.text, name) : null,
       h("div", { class: "bubble-meta" }, meta),
     ]);
   }
@@ -2025,6 +2066,7 @@
   sheet.addEventListener("focusout", () => setTimeout(fitChatToKeyboard, 0));
 
   function closeSheet() {
+    stopReading();
     savePlace(document.getElementById("sheet-quiet"));
     sheetGolem = null;
     sheetFocus = null;
@@ -2576,6 +2618,7 @@
     const theme = h("select", { "aria-label": "Theme", onchange: (e) => setTheme(e.target.value) }, [h("option", { value: "" }, "System"), h("option", { value: "light" }, "Light"), h("option", { value: "dark" }, "Dark")]);
     theme.value = document.documentElement.dataset.theme || "";
     panel.append(h("div", { class: "row" }, [h("div", { class: "grow" }, [h("span", { class: "rank-name" }, "Theme")]), theme]));
+    if (!DESKTOP) panel.append(voiceRow());
     if (passkeys) {
       const signing = passkeys.filter((p) => !p.pending).length;
       panel.append(h("ul", { class: "list" }, passkeys.map((p) => h("li", {}, [
@@ -3390,6 +3433,7 @@
   const screenOf = (name) => (DESKTOP || name === "settings" ? "overlords" : ["overlords", "artifacts", "tasks", "waiting"].includes(name) ? name : "fleet");
 
   function route() {
+    stopReading();
     const hash = location.hash.replace(/^#/, "");
     const name = hash.split(/[?&=]/)[0];
     screen = screenOf(name);
