@@ -85,6 +85,8 @@
       }
       const side = entry.kind === "you" ? "me" : "them";
       const bubble = { side, kind: entry.kind, text: String(entry.text), at: entry.at, first: true, last: true };
+      // A reply keeps its feed id, which is what plays it.
+      if (side === "them" && Number.isInteger(entry.seq)) bubble.seq = entry.seq;
       if (side === "me") {
         bubble.state = entry.queued || entry.pending ? "queued" : entry.unconfirmed ? "unconfirmed" : "sent";
         bubble.from = entry.via === "mobile" ? "mobile" : "desktop";

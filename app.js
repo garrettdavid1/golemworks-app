@@ -1029,6 +1029,7 @@
   }
 
   function readAloud(key, text) {
+    player?.stop();
     if (reading?.key === key) {
       if (reading.paused) voices.resume();
       else voices.pause();
@@ -1666,7 +1667,20 @@
   const BUBBLE_STATE = { sent: "✓ Sent", queued: "Queued", unconfirmed: "Sent, not confirmed" };
 
   /** One bubble: his on the right with its state, the Orchestrator's replies and raised notes on the left; a push's message (data-said) lands on its reply, or on the message while none came. */
-  function bubbleNode(b, name, replied = new Set()) {
+  // Play with the workshop's ElevenLabs voice, where its feed says it has a key; made here once the sealed feed is open.
+  let player = null;
+  const voicePlayer = () =>
+    (player ||= VoicePlay.create({
+      piece: async (workshopId, seq, from) => sealed.speech(feed?.accountId, workshopId, String(seq), await api("GET", `/api/speech/${encodeURIComponent(workshopId)}/${seq}/${from}`), from),
+      root: () => document,
+    }));
+  const playControls = (workshopId, seq, name) =>
+    h("div", { class: "read-row", "data-play": `${workshopId}:${seq}` }, [
+      h("button", { type: "button", class: "small read", "aria-label": `Play or stop ${name}'s reply`, onclick: () => (stopReading(), voicePlayer().play(workshopId, seq)) }, "▶ Play"),
+      h("span", { class: "note play-error", role: "status" }),
+    ]);
+
+  function bubbleNode(b, name, replied = new Set(), voiceFrom = null) {
     const meta = [h("time", { datetime: b.at }, clockTime(b.at))];
     if (b.side === "me") {
       if (b.from === "desktop") meta.unshift(h("span", {}, "Desktop"));
@@ -1680,7 +1694,7 @@
       // A photo this phone kept shows as its thumbnail; a file sent from another device, by name.
       b.files ? h("div", { class: "bubble-files" }, sentFiles({ id: b.said?.id ?? "feed", files: b.files })) : null,
       b.text.trim() ? bubbleText(b.text) : null,
-      b.side === "them" ? readControls(`chat:${b.at}|${b.text.length}`, b.text, name) : null,
+      b.side !== "them" ? null : voiceFrom && b.seq ? playControls(voiceFrom, b.seq, name) : readControls(`chat:${b.at}|${b.text.length}`, b.text, name),
       h("div", { class: "bubble-meta" }, meta),
     ]);
   }
@@ -1693,7 +1707,8 @@
     // No thread under the chat: its gw reply answers and never-confirmed messages show in it.
     const extra = [...stray, ...QuietChat.replies(said, view.entries)];
     // Nothing new: left as it is, so a selection or a scroll position survives a poll.
-    const drawn = JSON.stringify([new Date().toDateString(), g.state, view.entries, waiting, [...sent].map(([seq, s]) => [seq, s.id]), extra.map((e) => [e.at, e.replyTo || e.said?.id, e.text])]);
+    const voiceFrom = view.voice && typeof VoicePlay !== "undefined" ? g.workshopId : null;
+    const drawn = JSON.stringify([new Date().toDateString(), g.state, voiceFrom, view.entries, waiting, [...sent].map(([seq, s]) => [seq, s.id]), extra.map((e) => [e.at, e.replyTo || e.said?.id, e.text])]);
     const opening = Boolean(keep.opening && fetched);
     if (panel.quietDrawn === drawn && !opening) return;
     panel.quietDrawn = drawn;
@@ -1703,7 +1718,7 @@
     // Each row keyed by what it draws, so a redraw builds only the rows that changed.
     const rows = items.map((item) => (item.day
       ? { key: `day|${item.day}`, make: () => h("div", { class: "chat-day" }, h("span", {}, item.day)) }
-      : { key: JSON.stringify({ ...item, said: item.said?.id, replied: replied.has(item.said?.id) }), at: item.at, side: item.side, make: () => bubbleNode(item, name, replied) }));
+      : { key: JSON.stringify({ ...item, said: item.said?.id, replied: replied.has(item.said?.id), voiceFrom }), at: item.at, side: item.side, make: () => bubbleNode(item, name, replied, voiceFrom) }));
     if (!items.length) rows.push({ key: `empty|${name}`, make: () => h("p", { class: "chat-empty" }, `Nothing between you and ${name} yet.`) });
     if (g.state === "working") rows.push({ key: `typing|${name}`, make: () => h("div", { class: "bubble them first last typing", role: "status", "aria-label": `${name} is working` }, [h("span"), h("span"), h("span")]) });
     // The panel is not live (a redraw would read every bubble again): the newest reply is announced on its own.
@@ -1725,6 +1740,7 @@
       return node;
     }));
     keep.watch();
+    player?.paint();
     keep.onEnd ||= () => {
       panel.quietUnseen = false;
       panel.querySelector(":scope > .chat-new")?.remove();
@@ -2083,6 +2099,7 @@
 
   function closeSheet() {
     stopReading();
+    player?.stop();
     savePlace(document.getElementById("sheet-quiet"));
     sheetGolem = null;
     sheetFocus = null;

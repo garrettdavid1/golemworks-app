@@ -97,7 +97,8 @@
       const { body, seq } = E.decryptRecord(held.accountKeys, { accountId, workshopId, kind, id }, record);
       const key = JSON.stringify([accountId, workshopId, kind, id]);
       if (seen[key] > seq) throw Object.assign(new Error(`an older copy of this ${kind} (seq ${seq}, newest seen ${seen[key]})`), { code: "rolled-back" });
-      if (seen[key] !== seq) {
+      // A piece of audio is checked by its from, not remembered: one entry per reply played would pile up.
+      if (kind !== "speech" && seen[key] !== seq) {
         seen[key] = seq;
         remember();
       }
@@ -188,7 +189,7 @@
       if (!got?.sealed) return null;
       try {
         const body = open(await keys(), accountId, workshopId, "quiet", "current", got.sealed);
-        return body && Array.isArray(body.entries) ? { golemId: typeof body.golemId === "string" ? body.golemId : null, entries: body.entries.filter((e) => e && typeof e === "object" && typeof e.kind === "string"), last: body.last ?? null } : null;
+        return body && Array.isArray(body.entries) ? { ...(body.voice === true ? { voice: true } : {}), golemId: typeof body.golemId === "string" ? body.golemId : null, entries: body.entries.filter((e) => e && typeof e === "object" && typeof e.kind === "string"), last: body.last ?? null } : null;
       } catch {
         return null;
       }
@@ -235,6 +236,14 @@
       return { title: body?.title || null, text: typeof body?.text === "string" ? body.text : "", truncated: body?.truncated === true };
     }
 
+    /** A piece of a reply's audio: only a sealed one is taken, and only the piece that was asked for. */
+    async function speech(accountId, workshopId, id, got, from) {
+      if (!got?.sealed) throw new Error("the hub sent this audio in a form Mobile here can't check");
+      const body = open(await keys(), accountId, workshopId, "speech", id, got.sealed);
+      if (body?.from !== from || !Number.isSafeInteger(body.next) || typeof body.data !== "string") throw new Error("the audio did not arrive in order; try again");
+      return { next: body.next, done: body.done === true, data: body.data };
+    }
+
     /** Waiting on you with the sealed workshops' items (from the opened feed) ranked in among the hub's. */
     function waiting(view, opened) {
       const sealedOnes = list(opened?.workshops).filter((w) => w.sealed && w.waiting?.length);
@@ -246,7 +255,7 @@
       return { ...view, ...sections(items) };
     }
 
-    return { feed, history, quiet, commands, artifacts, artifactText, waiting, wasSealed };
+    return { feed, history, quiet, commands, artifacts, artifactText, speech, waiting, wasSealed };
   }
 
   return { create, sections, fromTasks, withTasks };
