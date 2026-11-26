@@ -2912,7 +2912,7 @@
   async function registerPasskey(grant = null) {
     try {
       // A signed-in phone adding a passkey confirms with Face ID first; an invite or the setup link needs no session.
-      const ask = () => api("POST", "/api/auth/register/options", { ...grant });
+      const ask = () => api("POST", "/api/auth/register/options", { ...grant, name: deviceName() });
       const { options, challengeId } = await (grant ? ask() : withFaceId(ask));
       const response = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: options });
       const verify = () => api("POST", "/api/auth/register/verify", { challengeId, response, name: deviceName(), ...grant, ...(DESKTOP ? { surface: "desktop" } : {}) });
@@ -2974,7 +2974,7 @@
   async function addComputer() {
     const note = main.querySelector(".signin .error");
     try {
-      const { options, challengeId } = await api("POST", "/api/auth/desktop/options", door);
+      const { options, challengeId } = await api("POST", "/api/auth/desktop/options", { ...door, name: deviceName() });
       const response = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: options });
       const { code, expiresAt } = await api("POST", "/api/auth/desktop/verify", { challengeId, response, name: deviceName(), ...door });
       main.querySelector(".signin").replaceChildren(
