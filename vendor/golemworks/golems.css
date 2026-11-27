@@ -5,10 +5,12 @@
 .step[data-state="done"] { background: linear-gradient(180deg, color-mix(in srgb, var(--done) 55%, white) 0 38%, var(--done) 38% 100%); }
 .step[data-state="current"]::before { content: ""; position: absolute; inset: 0; transform-origin: left; background: linear-gradient(180deg, color-mix(in srgb, var(--working) 55%, white) 0 38%, var(--working) 38% 100%); }
 .step.filling::before { animation: vein-fill 5s linear var(--vein) both; }
-.step.filling::after { content: ""; position: absolute; top: 0; bottom: 0; left: -20px; width: 14px; background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.75), transparent); transform: skewX(-20deg); animation: vein-glint 1.4s ease-in-out var(--vein) 3 both; }
+/* The glint is clipped by the fill's own timing, so it ends where the fill does. */
+.step.filling::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent, rgb(255 255 255 / 0.75), transparent) -20px 0 / 14px 100% no-repeat; animation: vein-clip 5s linear var(--vein) both, vein-glint 1.4s ease-in-out var(--vein) 3 both; }
 .step.setting { animation: vein-set 0.7s ease-out var(--set) both; }
 @keyframes vein-fill { from { transform: scaleX(0); } }
-@keyframes vein-glint { to { left: 110%; } }
+@keyframes vein-clip { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
+@keyframes vein-glint { to { background-position: calc(100% + 34px) 0; } }
 @keyframes vein-set { from { filter: brightness(2.4); } }
 .card[data-state="blocked"] .step[data-state="current"] { background: var(--blocked); }
 .card[data-state="blocked"] .step[data-state="current"]::before, .card[data-state="blocked"] .step[data-state="current"]::after { display: none; }
@@ -24,6 +26,11 @@
   .card.has-golem { gap: 8px; padding-left: 8px; }
   .golem-avatar { width: 44px; height: 38px; }
   .card.orchestrator .golem-avatar { width: 54px; height: 47px; }
+}
+/* Under 720 px the action row (slot badges included) wraps below the title rather than squeezing it to an ellipsis. */
+@media (max-width: 720px) {
+  .card.has-golem .card-top { flex-wrap: wrap; }
+  .card.has-golem .card-name { min-width: min(160px, 100%); }
 }
 @media (max-width: 480px) {
   .card.has-golem { gap: 4px; padding-left: 6px; }
@@ -60,8 +67,10 @@
 @media (max-width: 720px) { .golem-merged { gap: 4px; padding: 3px 6px; } .merged-cluster { width: 44px; height: 25px; } .merged-label { display: none; } .merged-count { font-size: 16px; } }
 @media (max-width: 480px) { .golem-merged { flex-direction: column; align-items: center; gap: 1px; padding: 2px 4px; } .merged-cluster { width: 32px; height: 18px; } .merged-count { font-size: 13px; } }
 @keyframes golem-bump { 40% { transform: scale(1.3); } }
-/* Nothing moves while the window is hidden or minimized, or for a card scrolled out of view. */
-body.motion-hold .has-golem, body.motion-hold .has-golem *, body.motion-hold .has-golem *::before, body.motion-hold .has-golem *::after, body.motion-hold .step::before, body.motion-hold .step::after,
+/* Loops stand still while the window is hidden, minimized, unfocused or untouched for a minute (golems.js start), and on a card scrolled out of view; a card's one-off effect (fx-*) still plays. */
+body.motion-hold .has-golem:not([class*="fx-"]), body.motion-hold .has-golem:not([class*="fx-"]) *,
+body.motion-hold .has-golem:not([class*="fx-"]) *::before, body.motion-hold .has-golem:not([class*="fx-"]) *::after,
+body.motion-hold .dot, body.motion-hold .loading-shard,
 .card.offscreen, .card.offscreen *, .card.offscreen *::before, .card.offscreen *::after { animation-play-state: paused !important; }
 @media (prefers-reduced-motion: reduce) {
   .card.has-golem, .step, .step::before, .step::after, .merged-count { animation: none !important; transition: none !important; }

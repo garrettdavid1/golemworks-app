@@ -4,7 +4,7 @@ const Golems = (() => {
   const reducedQuery = matchMedia("(prefers-reduced-motion: reduce)");
   const reduced = () => reducedQuery.matches;
   const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
-  const EFFECT_MS = { launch: 2700, done: 2000, crumble: 1800, ghost: 2400, ping: 2000, point: 1600, cheer: 1600, "core-gone": 3200, grow: 900 };
+  const EFFECT_MS = { launch: 2700, done: 2000, crumble: 1800, ghost: 2400, ping: 2000, point: 1600, cheer: 1600, face: 700, "core-gone": 3200, grow: 900 };
   const FLIGHT_MS = 1200;
   const VEIN_MS = 5000;
   const SET_WINDOW_MS = 1500;
@@ -30,6 +30,34 @@ const Golems = (() => {
     return templates[key].cloneNode(true);
   }
 
+  // ---------- turns ----------
+
+  const TURN_TICK_MS = 400;
+  const faced = new Map(); // golem name -> the way it last faced, kept while loops stand still
+  // A paused or closing golem, one that needs you and one mid-effect stands front.
+  const FRONT = ".fleet-paused, .ghost, .attention, .fx-launch, .fx-crumble, .fx-point, .fx-cheer";
+  /** The way a card's golem faces at ms: front with reduced motion or a FRONT card, as it last did while held, else where its pose has it. */
+  function facing(card, ms, { still = false, held = false, last = "" } = {}) {
+    if (still || card.matches(FRONT)) return "";
+    return held ? last : GolemArt.turnAt(card.dataset.state, ms);
+  }
+  const held = () => document.body.classList.contains("motion-hold");
+
+  /** Faces the card's golem that way (golem-art.css eases there). */
+  function turn(card, now) {
+    const view = facing(card, now + card.golemPhase, { still: reduced(), held: held(), last: faced.get(card.golemName) });
+    faced.set(card.golemName, view || "");
+    if ((card.dataset.turn || "") === (view || "")) return;
+    if (view) card.dataset.turn = view;
+    else delete card.dataset.turn;
+  }
+  /** Every golem on screen takes its next turn; none while loops stand still, unless reduced motion just came on. */
+  function turnAll() {
+    if (held() && !reduced()) return;
+    const now = performance.now();
+    for (const card of document.querySelectorAll(".has-golem:not(.offscreen)")) if (card.golemPhase !== undefined) turn(card, now);
+  }
+
   // ---------- one-off effects ----------
 
   function addEffect(name, kind, at, extra = {}) {
@@ -46,7 +74,9 @@ const Golems = (() => {
     return [...mine];
   }
 
-  /** A state push: launch, done and crumble effects, and a ghost card for a golem that left the Board (already closed). */
+  const needsYou = (pane) => pane.state === "blocked" || Boolean(pane.attention);
+
+  /** A state push: launch, done, turn-to-face-you and crumble effects, and a ghost card for a golem that left the Board (already closed). */
   function observe(previous, next, { wasLoaded, onBoard, order }) {
     if (!wasLoaded || reduced()) return;
     const now = performance.now();
@@ -59,6 +89,7 @@ const Golems = (() => {
         if (onBoard(pane)) addEffect(pane.name, "launch", now);
         continue;
       }
+      if (needsYou(pane) && !needsYou(old)) addEffect(pane.name, "face", now);
       if (pane.state === "done" && old.state !== "done") addEffect(pane.name, "done", now);
       if (pane.state === "exited" && !["exited", "parked"].includes(old.state)) addEffect(pane.name, "crumble", now);
     }
@@ -103,11 +134,16 @@ const Golems = (() => {
     // Each golem keeps its own phase, so two working golems never swing in step.
     const phase = [...pane.name].reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) % 997, 0) * 7;
     card.style.setProperty("--clock", `${-Math.round(now + phase)}ms`);
-    for (const [kind, effect] of activeEffects(pane.name, now)) {
+    card.golemPhase = phase;
+    card.golemName = pane.name;
+    const running = activeEffects(pane.name, now);
+    for (const [kind, effect] of running) {
       card.classList.add(`fx-${kind}`);
       card.style.setProperty(`--fx-${kind}`, `${Math.round(effect.at - now)}ms`);
       if (effect.tone) card.style.setProperty("--ping", effect.tone);
     }
+    // Each effect's own start: a second ping while one runs makes the card look new, so the Board swaps it and it replays.
+    if (running.length) card.dataset.fx = running.map(([kind, effect]) => `${kind}@${Math.round(effect.at)}`).join(" ");
     if (offscreen.has(pane.name)) card.classList.add("offscreen");
     if (ghost) {
       const record = ghosts.get(pane.name);
@@ -121,6 +157,8 @@ const Golems = (() => {
       card.inert = true;
       if (record) card.style.setProperty("--ghost-height", `${record.height}px`);
     }
+    // A rebuilt card is already facing where the one it replaces was.
+    turn(card, now);
     return card;
   }
 
@@ -291,13 +329,34 @@ const Golems = (() => {
 
   // ---------- page-wide ----------
 
+  // Loops stand still while nobody is looking: each one makes the compositor draw every display frame (golems.css motion-hold).
+  const IDLE_MS = 60000;
+  const motionHeld = ({ hidden, focused, idleMs }) => hidden || !focused || idleMs >= IDLE_MS;
+
   function start({ render, t }) {
     rerender = render;
     term = t;
-    const hold = () => document.body.classList.toggle("motion-hold", document.hidden);
+    let lastInput = performance.now();
+    let wake = null;
+    const hold = () => {
+      const idleMs = performance.now() - lastInput;
+      document.body.classList.toggle("motion-hold", motionHeld({ hidden: document.hidden, focused: document.hasFocus(), idleMs }));
+      clearTimeout(wake);
+      if (idleMs < IDLE_MS) wake = setTimeout(hold, IDLE_MS - idleMs + 50);
+    };
+    // Input only stamps a time; the class changes when the answer does.
+    const touched = () => {
+      const wasIdle = performance.now() - lastInput >= IDLE_MS;
+      lastInput = performance.now();
+      if (wasIdle) hold();
+    };
+    for (const type of ["pointermove", "pointerdown", "keydown", "wheel"]) document.addEventListener(type, touched, { capture: true, passive: true });
     document.addEventListener("visibilitychange", hold);
+    window.addEventListener("focus", hold);
+    window.addEventListener("blur", hold);
     hold();
+    setInterval(turnAll, TURN_TICK_MS);
   }
 
-  return { start, observe, withGhosts, decorate, watchBoard, spark, merged, setMerges, stepVein, EFFECT_MS };
+  return { start, facing, observe, withGhosts, decorate, watchBoard, spark, merged, setMerges, stepVein, motionHeld, IDLE_MS, EFFECT_MS };
 })();

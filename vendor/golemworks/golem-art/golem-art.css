@@ -1,19 +1,23 @@
 /* Golem art (docs/architecture.md "Golem animations"): the golem, its poses and keyframes, and the merge crystals; the host defines the colors listed there. */
-:root { --stone: #3d5397; --stone-l: #4f68b0; --stone-d: #2c3d73; --rock: #4b556d; --crack: rgb(5 10 25 / 0.45); --wood: #8a6a45; --metal: #a3aec8; --crystal-hi: #b4f3d3; }
-:root[data-theme="light"] { --stone: #4f67b0; --stone-l: #6880c8; --stone-d: #3a4f8c; --rock: #8a93a8; --crack: rgb(10 20 50 / 0.3); --wood: #9a7449; --metal: #7d88a3; --crystal-hi: #5cc493; }
+:root { --f1: #8a9be0; --f2: #6677c2; --f3: #4b5b9c; --f4: #343f73; --f-void: #0b1130; --rock: #4b556d; --crack: rgb(5 10 25 / 0.45); --wood: #8a6a45; --metal: #a3aec8; --crystal-hi: #b4f3d3; }
+:root[data-theme="light"] { --f1: #93a3e2; --f2: #6f80c8; --f3: #5464a4; --f4: #3d4a80; --f-void: #10173a; --rock: #8a93a8; --crack: rgb(10 20 50 / 0.3); --wood: #9a7449; --metal: #7d88a3; --crystal-hi: #5cc493; }
 .golem-avatar { position: relative; }
 .golem { display: block; width: 100%; height: 100%; overflow: visible; }
-.golem .stone { fill: var(--stone); }
-.golem .stone-l { fill: var(--stone-l); }
-.golem .stone-d { fill: var(--stone-d); }
+.golem .f1 { fill: var(--f1); }
+.golem .f2 { fill: var(--f2); }
+.golem .f3 { fill: var(--f3); }
+.golem .f4 { fill: var(--f4); }
+.golem .f-void { fill: var(--f-void); }
 .golem .crack { fill: none; stroke: var(--crack); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
 .golem .core { fill: var(--core, var(--accent)); }
-.golem .core-hi { fill: #fff; opacity: 0.35; }
+.golem .gem-a { fill: #fff; opacity: 0.42; }
+.golem .gem-b { fill: #000; opacity: 0.22; }
+.golem .metal-hi { fill: #fff; opacity: 0.35; }
 .golem .eye { fill: var(--state, var(--idle)); filter: drop-shadow(0 0 1.6px var(--state, var(--idle))); }
 .golem .wood { fill: var(--wood); }
 .golem .metal { fill: var(--metal); }
 .golem .work-rock polygon, .golem .chips circle { fill: var(--rock); }
-.golem .pebble { fill: var(--stone-d); transform-box: fill-box; transform-origin: center; }
+.golem .pebble { fill: var(--f3); transform-box: fill-box; transform-origin: center; }
 .golem .pebble:nth-child(odd) { fill: var(--rock); }
 .golem .pebbles, .golem .tool, .golem .work-rock, .golem .chips, .golem .watch { opacity: 0; }
 .golem .watch .band { fill: var(--metal); }
@@ -22,30 +26,72 @@
 .golem .arm-left { transform-origin: 12.5px 29px; }
 .golem .arm-right { transform-origin: 51.5px 29px; }
 .golem .head { transform-origin: 32px 24px; }
+.golem .fore-left { transform-origin: 12.5px 38px; }
+.golem .fore-right { transform-origin: 51.5px 38px; }
+/* lean: everything above the hips tips as one, eased like a turn; sideways over the rock, closer (larger and lower) toward the viewer */
+.golem .lean { transform-origin: 32px 50px; transition: rotate 0.4s linear(0 0% 25%, 0.15 25% 50%, 0.5 50% 75%, 0.85 75% 99%, 1); }
+.has-golem[data-state="working"] .golem .lean { rotate: 4deg; }
+.has-golem[data-state="working"][data-turn="right"] .golem .lean { rotate: 11deg; }
+.has-golem:is([data-state="idle"], [data-state="listening"])[data-turn="right"] .golem .lean { rotate: 3deg; }
+.has-golem:is([data-state="idle"], [data-state="listening"], [data-state="waiting"], [data-state="queued"])[data-turn="left"] .golem .lean { rotate: -3deg; }
 .golem .leg-right { transform-box: fill-box; transform-origin: 20% 0%; }
 .golem-badge { position: absolute; top: -6px; right: -2px; width: 18px; height: 18px; border-radius: 50%; background: var(--blocked); color: var(--blocked-text); font: 800 12px/18px var(--display); text-align: center; transform: scale(0); transition: transform 0.3s cubic-bezier(0.3, 1.6, 0.5, 1); }
 
 /* working: hammer swing at a rock, chips fly */
 .has-golem[data-state="working"] .golem .tool, .has-golem[data-state="working"] .golem .work-rock, .has-golem[data-state="working"] .golem .chips { opacity: 1; }
 .has-golem[data-state="working"] .golem .arm-right { animation: golem-swing 0.9s ease-in-out var(--clock) infinite; }
+.has-golem[data-state="working"] .golem .fore-right { animation: golem-swing-fore 0.9s ease-in-out var(--clock) infinite; }
 .has-golem[data-state="working"] .golem .chips circle { animation: golem-chip 0.9s linear var(--clock) infinite; }
 .golem .chips circle:nth-child(1) { --cx: 6px; --cy: -8px; }
 .golem .chips circle:nth-child(2) { --cx: -3px; --cy: -10px; }
 .golem .chips circle:nth-child(3) { --cx: 9px; --cy: -3px; }
+.has-golem[data-state="working"] .golem .gem-a { animation: golem-glint 0.9s linear var(--clock) infinite; }
+@keyframes golem-glint { 0%, 70%, 86%, 100% { opacity: 0.42; } 74% { opacity: 0.95; } }
 /* waiting (and queued for a slot): three foot taps, then a look at the watch, every 4 seconds */
 .has-golem:is([data-state="waiting"], [data-state="queued"]) .golem .watch { opacity: 1; }
 .has-golem:is([data-state="waiting"], [data-state="queued"]) .golem .leg-right { animation: golem-tap 4s ease-in-out var(--clock) infinite; }
 .has-golem:is([data-state="waiting"], [data-state="queued"]) .golem .arm-left { animation: golem-check-watch 4s ease-in-out var(--clock) infinite; }
+.has-golem:is([data-state="waiting"], [data-state="queued"]) .golem .fore-left { animation: golem-check-fore 4s ease-in-out var(--clock) infinite; }
 .has-golem:is([data-state="waiting"], [data-state="queued"]) .golem .head { animation: golem-look-down 4s ease-in-out var(--clock) infinite; }
 .has-golem:is([data-state="waiting"], [data-state="queued"]) .golem .eyes { animation: golem-eyes-down 4s ease-in-out var(--clock) infinite; }
 /* idle: slow breathing, eyes dim */
 .has-golem:is([data-state="idle"], [data-state="listening"]) .golem .figure { animation: golem-breathe 3.2s ease-in-out var(--clock) infinite; }
 .has-golem:is([data-state="idle"], [data-state="listening"]) .golem .eye { animation: golem-dim 3.2s ease-in-out var(--clock) infinite; }
-/* Needs you: red core, a waving raised arm, a hop and the badge; after every other pose so it wins */
+/* turns: each .yaw group says how it looks turned: --tx flips with the direction, --in does not, --sr/--sl narrow and --or/--ol show it facing right/left */
+.golem .yaw { transform-box: fill-box; transform-origin: center; --tx: 0px; --in: 0px; --sr: 1; --sl: 1; --o0: 1; --or: 1; --ol: 1; }
+.golem .y-head { --tx: 1.2px; --sr: 0.9; --sl: 0.9; }
+.golem .y-crown { --tx: 2px; --sr: 0.82; --sl: 0.82; }
+.golem .y-visor { --tx: 5px; --sr: 0.72; --sl: 0.72; }
+.golem .y-eye-l { --sl: 0.5; }
+.golem .y-eye-r { --sr: 0.5; }
+.golem .y-torso { --sr: 0.9; --sl: 0.9; }
+.golem .y-core { --tx: 6.5px; --sr: 0.6; --sl: 0.6; }
+/* the three-quarter faces of head and chest fade in over the front, narrowing with its outline */
+.golem :is(.y-brow-r, .y-brow-l, .y-chest-r, .y-chest-l) { opacity: 0; --sr: 0.9; --sl: 0.9; --o0: 0; --or: 0; --ol: 0; }
+.golem :is(.y-brow-r, .y-chest-r) { --or: 1; }
+.golem :is(.y-brow-l, .y-chest-l) { --ol: 1; }
+.golem :is(.y-brow-r, .y-brow-l) { --tx: 1.2px; }
+.golem .y-arm-l { --tx: 1px; --in: 4px; }
+.golem .y-arm-r { --tx: 1px; --in: -4px; }
+.golem .y-leg-l { --tx: 1px; --in: 1.6px; }
+.golem .y-leg-r { --tx: 1px; --in: -1.6px; }
+/* data-turn (GolemArt.turnAt) eases the parts in held frames, no loop (a smooth ease doubled the CPU of 20 cards); "back" is the head over the shoulder */
+.golem .yaw { --ease: 0.4s linear(0 0% 25%, 0.15 25% 50%, 0.5 50% 75%, 0.85 75% 99%, 1); transition: translate var(--ease), scale var(--ease), opacity var(--ease); }
+.has-golem[data-turn="right"] .golem .yaw { translate: calc(var(--tx) + var(--in)) 0; scale: var(--sr) 1; opacity: var(--or); }
+.has-golem[data-turn="left"] .golem .yaw { translate: calc(var(--in) - var(--tx)) 0; scale: var(--sl) 1; opacity: var(--ol); }
+.has-golem[data-turn="back"] .golem .yh { translate: calc(var(--tx) * 1.35 + var(--in)) 0; scale: calc(var(--sr) * var(--sr)) 1; opacity: var(--or); }
+/* Needs you: red core, a raised arm waving from the elbow, a lean toward you, a hop and the badge; after every other pose so it wins */
 .has-golem:is([data-state="blocked"], .attention) .golem { --core: var(--blocked); }
 .has-golem:is([data-state="blocked"], .attention) .golem :is(.tool, .work-rock, .chips, .watch) { opacity: 0; }
-.has-golem:is([data-state="blocked"], .attention) .golem .arm-right { transform: rotate(-150deg); animation: golem-wave 0.8s ease-in-out var(--clock) infinite; }
-.has-golem:is([data-state="blocked"], .attention) .golem :is(.arm-left, .head, .eyes, .leg-right, .eye, .chips circle) { animation: none; }
+.has-golem:is([data-state="blocked"], .attention) .golem .arm-right { transform: rotate(-135deg); animation: golem-wave 0.8s ease-in-out var(--clock) infinite; }
+.has-golem:is([data-state="blocked"], .attention) .golem .fore-right { transform: rotate(-40deg); animation: golem-wave-fore 0.8s ease-in-out var(--clock) infinite; }
+.has-golem:is([data-state="blocked"], .attention) .golem .lean { rotate: 0deg; scale: 1.09; translate: 0 1px; }
+.has-golem:is([data-state="blocked"], .attention) .golem :is(.arm-left, .fore-left, .head, .eyes, .leg-right, .eye, .chips circle, .yaw, .gem-a) { animation: none; }
+/* it turns to face you as it starts needing you, and stays facing you */
+.has-golem.fx-face:is([data-state="blocked"], .attention) .golem .yaw { animation: golem-face-you 0.7s cubic-bezier(0.3, 1.4, 0.5, 1) var(--fx-face) both; }
+.has-golem.fx-face:is([data-state="blocked"], .attention) .golem .lean { animation: golem-lean-in 0.7s cubic-bezier(0.3, 1.4, 0.5, 1) var(--fx-face) both; }
+@keyframes golem-lean-in { from { scale: 1; translate: 0 0; } }
+@keyframes golem-face-you { from { translate: calc(var(--tx) + var(--in)) 0; scale: var(--sr) 1; opacity: var(--or); } }
 .has-golem:is([data-state="blocked"], .attention) .golem .figure { animation: golem-hop 1.6s ease-in-out var(--clock) infinite; }
 .has-golem:is([data-state="blocked"], .attention) .golem-badge { transform: scale(1); animation: golem-bob 1.6s ease-in-out var(--clock) infinite; }
 .has-golem[data-state="done"]:not(.attention) .golem { --core: var(--done); }
@@ -60,12 +106,15 @@
 @keyframes golem-swing { 0% { transform: rotate(-15deg); } 40% { transform: rotate(-135deg); } 55% { transform: rotate(-140deg); } 72% { transform: rotate(-40deg); } 80% { transform: rotate(-46deg); } 100% { transform: rotate(-15deg); } }
 @keyframes golem-chip { 0%, 71% { opacity: 0; transform: translate(0, 0); } 73% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--cx), var(--cy)); } }
 @keyframes golem-tap { 0%, 5%, 11%, 17%, 23%, 29%, 35%, 100% { transform: none; } 8%, 20%, 32% { transform: translateY(-3px) rotate(-7deg); } }
-@keyframes golem-check-watch { 0%, 52% { transform: rotate(0deg); } 61%, 86% { transform: rotate(-95deg); } 95%, 100% { transform: rotate(0deg); } }
+@keyframes golem-check-watch { 0%, 52% { transform: rotate(0deg); } 61%, 86% { transform: rotate(-25deg); } 95%, 100% { transform: rotate(0deg); } }
+@keyframes golem-check-fore { 0%, 52% { transform: rotate(0deg); } 61%, 86% { transform: rotate(-100deg); } 95%, 100% { transform: rotate(0deg); } }
+@keyframes golem-swing-fore { 0% { transform: rotate(-30deg); } 40% { transform: rotate(-80deg); } 55% { transform: rotate(-90deg); } 72% { transform: rotate(0deg); } 80% { transform: rotate(-14deg); } 100% { transform: rotate(-30deg); } }
 @keyframes golem-look-down { 0%, 55% { transform: none; } 63%, 86% { transform: rotate(-9deg) translateY(1px); } 94%, 100% { transform: none; } }
 @keyframes golem-eyes-down { 0%, 57% { transform: none; } 64%, 86% { transform: translate(-1.5px, 1.6px); } 93%, 100% { transform: none; } }
 @keyframes golem-breathe { 50% { transform: translateY(0.9px); } }
 @keyframes golem-dim { 50% { opacity: 0.45; } }
-@keyframes golem-wave { 0%, 100% { transform: rotate(-145deg); } 50% { transform: rotate(-172deg); } }
+@keyframes golem-wave { 0%, 100% { transform: rotate(-128deg); } 50% { transform: rotate(-146deg); } }
+@keyframes golem-wave-fore { 0%, 100% { transform: rotate(5deg); } 50% { transform: rotate(-75deg); } }
 @keyframes golem-hop { 0%, 60%, 100% { transform: translateY(0); } 75% { transform: translateY(-2.5px); } }
 @keyframes golem-bob { 50% { translate: 0 -3px; } }
 
@@ -79,7 +128,7 @@
 .has-golem.fx-launch .golem .arm-right { animation-delay: calc(var(--fx-launch) + 1.64s); }
 .has-golem.fx-launch .golem .head { animation-delay: calc(var(--fx-launch) + 1.78s); }
 .has-golem.fx-launch .golem .eye { animation: golem-eyes-on 0.5s calc(var(--fx-launch) + 2.2s) both; }
-.has-golem.fx-launch .golem :is(.chips circle, .leg-right, .eyes), .has-golem.fx-launch .golem-badge { animation: none; }
+.has-golem.fx-launch .golem :is(.chips circle, .leg-right, .eyes, .yaw, .gem-a, .fore), .has-golem.fx-launch .golem-badge { animation: none; }
 @keyframes golem-assembled { 0%, 48% { opacity: 0; } 49%, 100% { opacity: 1; } }
 @keyframes golem-pebbles-gone { 0%, 60% { opacity: 1; } 75%, 100% { opacity: 0; } }
 @keyframes golem-roll-in { from { transform: translate(calc((var(--i) - 3) * 10px), -10px) rotate(-180deg); opacity: 0; } }
@@ -97,7 +146,7 @@
 .has-golem.fx-crumble .golem .legs { animation-name: golem-fall-legs; animation-delay: calc(var(--fx-crumble) + 0.8s); }
 .has-golem.fx-crumble .golem .pebbles { opacity: 1; }
 .has-golem.fx-crumble .golem .pebble { animation: golem-drop 0.4s ease-in both; animation-delay: calc(var(--fx-crumble) + 1s + var(--i) * 50ms); }
-.has-golem.fx-crumble .golem :is(.chips circle, .eye, .eyes, .leg-right), .has-golem.fx-crumble .golem-badge { animation: none; }
+.has-golem.fx-crumble .golem :is(.chips circle, .eye, .eyes, .leg-right, .yaw, .gem-a, .fore), .has-golem.fx-crumble .golem-badge { animation: none; }
 @keyframes golem-shake { 25% { transform: translateX(-1px); } 75% { transform: translateX(1px); } }
 @keyframes golem-fall-head { to { transform: translate(-6px, 34px) rotate(-60deg); opacity: 0; } }
 @keyframes golem-fall-arm-l { to { transform: translate(-10px, 22px) rotate(-90deg); opacity: 0; } }
@@ -114,15 +163,23 @@
 
 /* Orchestrator sparks: the sender points, the target pings as the spark lands */
 .has-golem.fx-point .golem .arm-right { animation: golem-point 1.6s ease-in-out var(--fx-point) both; }
+.has-golem.fx-point:not([data-state="blocked"], .attention) .golem .yaw { animation: golem-turn-point 1.6s ease-in-out var(--fx-point) both; }
+.has-golem.fx-point .golem .fore-right { animation: golem-reach-fore 1.6s ease-in-out var(--fx-point) both; }
+@keyframes golem-reach-fore { 0%, 40%, 75%, 100% { transform: none; } 18% { transform: rotate(-70deg); } }
+@keyframes golem-turn-point { 0%, 100% { translate: 0 0; scale: 1 1; opacity: var(--o0); } 20%, 75% { translate: calc(var(--tx) + var(--in)) 0; scale: var(--sr) 1; opacity: var(--or); } }
 @keyframes golem-point { 0%, 100% { transform: none; } 15%, 75% { transform: rotate(-65deg); } }
 
 /* merge: the golem cheers and its core crystal flies to the Merged today cluster */
 .has-golem.fx-cheer .golem .arm-left { animation: golem-cheer-l 1.6s ease-in-out var(--fx-cheer) both; }
 .has-golem.fx-cheer .golem .arm-right { animation: golem-cheer-r 1.6s ease-in-out var(--fx-cheer) both; }
-.has-golem.fx-core-gone .golem :is(.torso .core, .core-hi) { animation: golem-core-gone 3.2s linear var(--fx-core-gone) forwards; }
+.has-golem.fx-core-gone .golem .torso .y-core * { animation: golem-core-gone 3.2s linear var(--fx-core-gone) both; }
+.has-golem.fx-cheer .golem .fore-left { animation: golem-pump-l 1.6s ease-in-out var(--fx-cheer) both; }
+.has-golem.fx-cheer .golem .fore-right { animation: golem-pump-r 1.6s ease-in-out var(--fx-cheer) both; }
+@keyframes golem-pump-l { 0%, 100% { transform: none; } 25%, 55% { transform: rotate(55deg); } 40%, 70% { transform: rotate(10deg); } }
+@keyframes golem-pump-r { 0%, 100% { transform: none; } 25%, 55% { transform: rotate(-55deg); } 40%, 70% { transform: rotate(-10deg); } }
 @keyframes golem-cheer-l { 0%, 100% { transform: none; } 15%, 80% { transform: rotate(150deg); } }
 @keyframes golem-cheer-r { 0%, 100% { transform: none; } 15%, 80% { transform: rotate(-150deg); } }
-@keyframes golem-core-gone { 0%, 88% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes golem-core-gone { 0%, 88% { opacity: 0; } }
 .cluster .crystal-body { fill: var(--accent); opacity: 0.9; }
 .cluster .crystal-facet { fill: var(--crystal-hi); opacity: 0.7; }
 .cluster .cluster-rock { fill: var(--rock); }
@@ -133,8 +190,10 @@
 /* Reduced motion: no motion at all; each state shows by pose and color alone. */
 @media (prefers-reduced-motion: reduce) {
   .golem, .golem *, .golem-badge, .cluster * { animation: none !important; transition: none !important; }
-  .has-golem:is([data-state="waiting"], [data-state="queued"]):not(.attention) .golem .arm-left { transform: rotate(-95deg); }
+  .has-golem:is([data-state="waiting"], [data-state="queued"]):not(.attention) .golem .arm-left { transform: rotate(-25deg); }
+  .has-golem:is([data-state="waiting"], [data-state="queued"]):not(.attention) .golem .fore-left { transform: rotate(-100deg); }
   .has-golem:is([data-state="waiting"], [data-state="queued"]):not(.attention) .golem .head { transform: rotate(-9deg) translateY(1px); }
   .has-golem:is([data-state="idle"], [data-state="listening"]) .golem .eye { opacity: 0.55; }
   .has-golem[data-state="working"]:not(.attention) .golem .arm-right { transform: rotate(-40deg); }
+  .has-golem[data-state="working"]:not(.attention) .golem .fore-right { transform: rotate(-14deg); }
 }

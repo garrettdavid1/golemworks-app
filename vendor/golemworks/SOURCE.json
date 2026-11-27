@@ -1,7 +1,7 @@
 {
-  "commit": "36e651f9ec8c71ba4d03a4170e2a618722ed8931",
+  "commit": "6dfee3361ce8b2005f160eac041e95822fe54aaa",
   "branch": "main",
-  "copiedAt": "2026-11-16T21:52:34.011Z",
+  "copiedAt": "2026-11-27T14:13:47.723Z",
   "files": [
     "src/ui/golems.js",
     "src/ui/golems.css",

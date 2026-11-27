@@ -5,19 +5,53 @@
   else root.GolemArt = api;
 })(typeof self !== "undefined" ? self : this, () => {
   const MAX_CRYSTALS = 12;
+  // The pebbles it assembles from and crumbles to: crystal chips.
   const PEBBLES = [[18, 62], [26, 63], [34, 62.5], [42, 63], [30, 59], [38, 59.5], [22, 59]]
-    .map(([x, y], i) => `<circle class="pebble" cx="${x}" cy="${y}" r="${2.6 + ((i * 7) % 3) * 0.5}" style="--i:${i}"/>`)
+    .map(([x, y], i) => {
+      const r = 2.8 + ((i * 7) % 3) * 0.5;
+      return `<polygon class="pebble" points="${x - r},${y} ${x - r * 0.3},${y - r} ${x + r},${y - r * 0.2} ${x + r * 0.4},${y + r * 0.8}" style="--i:${i}"/>`;
+    })
     .join("");
-  const CROWN = '<g class="crown"><polygon class="core" points="25,8 27.5,1 30,8"/><polygon class="core" points="29.5,7 32,-2 34.5,7"/><polygon class="core" points="34,8 36.5,1 39,8"/></g>';
+  const points = (list) => list.map(([x, y]) => `${Math.round(x * 10) / 10},${Math.round(y * 10) / 10}`).join(" ");
+  const poly = (cls, list) => `<polygon class="${cls}" points="${points(list)}"/>`;
+  /** Flat facets from center c to each edge of ring, lit by shades. */
+  const fan = (c, ring, shades) => ring.map((p, i) => poly(shades[i], [p, ring[(i + 1) % ring.length], c])).join("");
+  // A three-quarter view is the same outline with its ridge moved across and the flank it uncovers in shadow.
+  const views = (cls, [x, y], by, ring, right, left) => yaw(`${cls}-r`, fan([x + by, y], ring, right.split(" "))) + yaw(`${cls}-l`, fan([x - by, y], ring, left.split(" ")));
+  const mirror = (list) => list.map(([x, y]) => [64 - x, y]);
+  /** A part a turn moves (golem-art.css "turns"): its own group, so a turn never fights the part's pose. */
+  const yaw = (cls, inner) => `<g class="yaw ${cls}">${inner}</g>`;
+
+  const TORSO = [[16, 26], [24, 22], [40, 22], [48, 26], [47, 42], [40, 51], [24, 51], [17, 42]];
+  const TORSO_SHADES = ["f1", "f2", "f2", "f3", "f4", "f4", "f3", "f2"];
+  const HEAD = [[23, 9], [29, 5], [37, 5.5], [42, 10], [41.5, 20], [37, 24], [27, 24], [22, 19.5]];
+  const HEAD_SHADES = ["f1", "f1", "f2", "f3", "f4", "f3", "f3", "f2"];
+  const ARM = [[[[9, 28], [16, 26], [8, 38]], "f1", "f2"], [[[16, 26], [17, 38], [8, 38]], "f2", "f1"], [[[8, 38], [17, 38], [16, 47]], "f3", "f3"], [[[8, 38], [16, 47], [9, 47]], "f4", "f4"]];
+  // Upper arm and forearm hinge at the elbow; a stone at the elbow, and one on each side of the torso, fill the gaps a bent or raised arm would open.
+  const SHOULDER = [[16, 25.5], [20, 30], [16, 35], [11, 29.5]];
+  const ELBOW = [[12.5, 34], [16.8, 38], [12.5, 42], [8.2, 38]];
+  const UPPER_L = poly("f3", ELBOW) + ARM.slice(0, 2).map(([list, cls]) => poly(cls, list)).join("");
+  const UPPER_R = poly("f3", mirror(ELBOW)) + ARM.slice(0, 2).map(([list, , cls]) => poly(cls, mirror(list))).join("");
+  const FORE_L = ARM.slice(2).map(([list, cls]) => poly(cls, list)).join("");
+  const FORE_R = ARM.slice(2).map(([list, , cls]) => poly(cls, mirror(list))).join("");
+  const leg = (dx) => [["f2", [[21, 48], [30, 48], [20.5, 57]]], ["f3", [[30, 48], [30.5, 57], [20.5, 57]]], ["f4", [[20.5, 57], [30.5, 57], [28.5, 61], [22, 61]]]]
+    .map(([cls, list]) => poly(cls, list.map(([x, y]) => [x + dx, y]))).join("");
+
+  const shard = (x, top, half) => `<polygon class="core" points="${x - half},7 ${x},${top} ${x + half},7"/><polygon class="gem-a" points="${x - half},7 ${x},${top} ${x},7"/>`;
+  const CROWN = `<g class="crown">${shard(27, 0, 2.2)}${shard(32, -3, 2.5)}${shard(37, 0, 2.2)}</g>`;
+  const eye = (side, list) => yaw(`yh y-eye-${side}`, poly("eye", list));
+
   const figure = (crown) => `<svg class="golem" viewBox="-6 -6 84 72" aria-hidden="true" focusable="false">
     <g class="pebbles">${PEBBLES}</g>
     <g class="work-rock"><polygon points="62,62 64,53 70,51 76,55 77,62"/></g>
     <g class="figure">
-      <g class="legs part"><rect class="stone-d" x="21" y="48" width="9" height="13" rx="3"/><rect class="stone-d leg-right" x="34" y="48" width="9" height="13" rx="3"/></g>
-      <g class="torso part"><rect class="stone" x="16" y="23" width="32" height="28" rx="8"/><path class="crack" d="M21 29 l4 3 l-2 5 M43 42 l-3 3"/><polygon class="core" points="32,30 37.5,37 32,45 26.5,37"/><polygon class="core-hi" points="32,30 37.5,37 32,37"/></g>
-      <g class="arm arm-left part"><rect class="stone" x="8" y="27" width="9" height="20" rx="4"/><rect class="stone-d" x="8" y="41" width="9" height="6" rx="3"/><g class="watch"><rect class="band" x="7.5" y="37.6" width="10" height="3" rx="1"/><circle class="face" cx="12.5" cy="39.1" r="2.7"/><path class="hands" d="M12.5 39.1 V37.3 M12.5 39.1 H13.9"/></g></g>
-      <g class="head part"><rect class="stone-l" x="22" y="6" width="20" height="18" rx="6"/>${crown ? CROWN : ""}<g class="eyes"><rect class="eye" x="26" y="13" width="4.5" height="4" rx="1.2"/><rect class="eye" x="33.5" y="13" width="4.5" height="4" rx="1.2"/></g></g>
-      <g class="arm arm-right part"><g class="tool"><rect class="wood" x="50.5" y="42" width="3" height="14" rx="1"/><rect class="metal" x="46" y="52" width="12" height="5.5" rx="1.2"/></g><rect class="stone" x="47" y="27" width="9" height="20" rx="4"/><rect class="stone-d" x="47" y="41" width="9" height="6" rx="3"/></g>
+      <g class="legs part">${yaw("y-leg-l", leg(0))}${yaw("y-leg-r", `<g class="leg-right">${leg(13)}</g>`)}</g>
+      <g class="lean">
+      <g class="torso part">${poly("f3", SHOULDER)}${poly("f3", mirror(SHOULDER))}${yaw("y-torso", fan([32, 37], TORSO, TORSO_SHADES))}${views("y-chest", [32, 37], 8, TORSO, "f2 f1 f1 f2 f3 f4 f4 f3", "f1 f2 f3 f4 f4 f4 f3 f1")}<path class="crack" d="M21 29 l4 3 l-2 5 M43 42 l-3 3"/>${yaw("y-core", '<polygon class="core" points="32,29.5 38,37 32,45 26,37"/><polygon class="gem-a" points="32,29.5 26,37 32,37"/><polygon class="gem-b" points="32,37 38,37 32,45"/>')}</g>
+      ${yaw("y-arm-l", `<g class="arm arm-left part">${UPPER_L}<g class="fore fore-left">${FORE_L}<g class="watch"><rect class="band" x="7.5" y="37.6" width="10" height="3" rx="1"/><circle class="face" cx="12.5" cy="39.1" r="2.7"/><path class="hands" d="M12.5 39.1 V37.3 M12.5 39.1 H13.9"/></g></g></g>`)}
+      <g class="head part">${yaw("yh y-head", fan([32, 14], HEAD, HEAD_SHADES))}${views("yh y-brow", [32, 14], 6, HEAD, "f2 f1 f1 f2 f3 f3 f4 f3", "f1 f2 f3 f4 f4 f3 f3 f1")}${crown ? yaw("yh y-crown", CROWN) : ""}${yaw("yh y-visor", `<polygon class="f-void" points="24.5,13 39.5,13 40.5,15.5 38.5,18 25.5,18 23.5,15.5"/><g class="eyes">${eye("l", [[25.6, 14], [30.6, 14.8], [30.2, 17], [25.8, 16.4]])}${eye("r", [[33.4, 14.8], [38.4, 14], [38.2, 16.4], [33.8, 17]])}</g>`)}</g>
+      ${yaw("y-arm-r", `<g class="arm arm-right part">${UPPER_R}<g class="fore fore-right"><g class="tool"><rect class="wood" x="50.5" y="42" width="3" height="14" rx="0.6"/><polygon class="metal" points="46,52.5 58,52 58,57.5 46,57"/><polygon class="metal-hi" points="46,52.5 58,52 57,54 47,54.5"/></g>${FORE_R}</g></g>`)}
+      </g>
     </g>
     <g class="chips"><circle cx="68" cy="51" r="1.4"/><circle cx="68" cy="51" r="1.1"/><circle cx="68" cy="51" r="1.2"/></g>
   </svg>`;
@@ -46,5 +80,21 @@
     return `<svg class="cluster" viewBox="0 0 120 68" aria-hidden="true" focusable="false">${SLOTS.slice(0, Math.min(count, MAX_CRYSTALS)).map(crystal).join("")}<polygon class="cluster-rock" points="8,66 16,56 38,52 64,54 92,52 108,58 112,67 6,67"/><circle class="landing" cx="${next.x}" cy="${56 - next.h / 2}" r="1" fill="none"/></svg>`;
   }
 
-  return { avatar, cluster, MAX_CRYSTALS };
+  // When each pose turns, as [period, [from, to, view]...] in ms of the golem's own clock; waiting's fall between its looks at the watch.
+  const TURNS = {
+    working: [7200, [500, 4400, "right"]],
+    waiting: [12000, [600, 1300, "left"], [7900, 9400, "back"]],
+    idle: [16000, [5000, 7400, "right"], [12000, 14200, "left"]],
+  };
+  TURNS.queued = TURNS.waiting;
+  TURNS.listening = TURNS.idle;
+  /** The way a golem in state faces at ms on its clock: "right", "left", "back" or "" (front, always so when it needs you). */
+  function turnAt(state, ms) {
+    if (!Object.hasOwn(TURNS, state)) return "";
+    const [period, ...spans] = TURNS[state];
+    const at = ms % period;
+    return spans.find(([from, to]) => at >= from && at < to)?.[2] ?? "";
+  }
+
+  return { avatar, cluster, turnAt, MAX_CRYSTALS };
 });
