@@ -1884,7 +1884,7 @@
       ? { key: `day|${item.day}`, make: () => h("div", { class: "chat-day" }, h("span", {}, item.day)) }
       : { key: JSON.stringify({ ...item, said: item.said?.id, delivery: item.said?.delivery, error: item.said?.error, replied: replied.has(item.said?.id), voiceFrom }), at: item.at, side: item.side, make: () => bubbleNode(item, name, replied, voiceFrom) }));
     if (!items.length) rows.push({ key: `empty|${name}`, make: () => h("p", { class: "chat-empty" }, `Nothing between you and ${name} yet.`) });
-    if (g.state === "working") rows.push({ key: `typing|${name}`, make: () => h("div", { class: "bubble them first last typing", role: "status", "aria-label": `${name} is working` }, [h("span"), h("span"), h("span")]) });
+    if (g.working ?? g.state === "working") rows.push({ key: `typing|${name}`, make: () => h("div", { class: "bubble them first last typing", role: "status", "aria-label": `${name} is working` }, [h("span"), h("span"), h("span")]) });
     // The panel is not live (a redraw would read every bubble again): the newest reply is announced on its own.
     const newest = items.filter((i) => i.side === "them").at(-1);
     const heard = newest && `${newest.at}|${newest.text.length}`;
