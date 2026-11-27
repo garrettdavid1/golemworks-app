@@ -590,6 +590,8 @@
     }
     quietRender();
     refreshSaid();
+    // A chat whose fetch failed as the sheet opened has no panel yet: it opens once the feed answers.
+    if (quietStale() && !document.getElementById("sheet-quiet")) quietArrived().catch(() => {});
     refreshQuiet().catch(() => {});
     landOnAsk();
     if (screen === "artifacts") loadArtifacts();
@@ -1736,6 +1738,14 @@
   // The open chat's last opened feed and said list, so a summary change redraws its working line without fetching the feed.
   let quietShown = null; // { key, view, said }
   let quietAsked = 0;
+  // The ask behind the newest chat and said list taken: a later answer from an earlier ask never replaces them.
+  let quietViewAsk = 0;
+  let quietSaidAsk = 0;
+  // A chat change that may have been missed (an event, time away, a failed fetch) stays wanted until a fetch begun after it answers (G-340).
+  let quietWanted = 0;
+  let quietGot = 0;
+  const quietMissed = () => void quietWanted++;
+  const quietStale = () => quietGot < quietWanted;
   const quietKey = (g) => `${g.workshopId}/${g.golemId}`;
   const askKeyOf = (ask) => `${ask.workshopId}:${ask.id}`;
   // A message sent from the open chat lands at the newest, even from scrolled up (David, 2026-11-21); an answer to the Orchestrator's question leaves it where it was (G-110).
@@ -1797,7 +1807,10 @@
   /** The Orchestrator's Quiet feed opened for its sheet, or null: not the overlord, names only, a plaintext workshop (it never sends one), none or an empty one, or no key. */
   async function loadQuiet(g) {
     if (g.type !== "overlord" || g.namesOnly || !sealed || typeof QuietChat === "undefined") return null;
+    const mark = quietWanted;
     const got = await api("GET", `/api/quiet/${encodeURIComponent(g.workshopId)}`).catch(() => null);
+    if (got) quietGot = Math.max(quietGot, mark);
+    else quietWanted = Math.max(quietWanted, quietGot + 1);
     const view = await sealed.quiet(feed?.accountId, g.workshopId, got);
     return view && view.golemId === g.golemId ? view : null;
   }
@@ -2015,7 +2028,8 @@
     if (!g || sheet.hidden || g.type !== "overlord") return;
     if (document.getElementById("sheet-quiet")) return refreshQuiet({ fetch: true });
     const draft = sheet.querySelector("form.message textarea")?.value.trim() || attached.get(`message:${g.workshopId}/${g.golemId}`)?.length;
-    if (!draft && (await loadQuiet(g)) && sheetGolem === g) openGolem(g);
+    // What a push pointed at is still flashed when its chat only opens now.
+    if (!draft && (await loadQuiet(g)) && sheetGolem === g) openGolem(g, sheetData?.about);
   }
 
   /** The open Orchestrator chat drawn again: fetch (a quiet event, a message sent) opens the feed anew; otherwise the last one, with the newest said list and state. */
@@ -2033,17 +2047,25 @@
     const asked = ++quietAsked;
     const cached = quietShown?.key === quietKey(g) ? quietShown : null;
     // A chat waiting to be placed fetches whoever asks (the app's own return poll overtakes the chat's fetch), so it is placed on the newest feed.
-    const fresh = fetch || !cached || Boolean(panel.chatKeeper?.opening);
-    const [view, list] = await Promise.all([
-      fresh ? loadQuiet(g) : cached.view,
+    const fresh = fetch || !cached || quietStale() || Boolean(panel.chatKeeper?.opening);
+    const [got, list] = await Promise.all([
+      fresh ? loadQuiet(g) : null,
       // The said list each time, as the thread was: a gw reply answer lands on it, not in the feed.
-      said || api("GET", `/api/said/${encodeURIComponent(g.workshopId)}/${encodeURIComponent(g.golemId)}`).catch(() => null).then((got) => (got ? openSaid(g, got) : cached?.said || [])),
+      said || api("GET", `/api/said/${encodeURIComponent(g.workshopId)}/${encodeURIComponent(g.golemId)}`).catch(() => null).then((answer) => (answer ? openSaid(g, answer) : null)),
     ]);
-    // Only the newest ask draws, and only into this golem's own panel.
-    if (asked !== quietAsked || !view || sheetGolem !== g || !panel.isConnected) return;
+    // Only into this golem's own panel.
+    if (!sheetGolem || quietKey(sheetGolem) !== quietKey(g) || !panel.isConnected) return;
+    // A quicker redraw never throws away a fetch still on its way: each answer draws with the newest of both (G-340).
+    const kept = quietShown?.key === quietKey(g) ? quietShown : null;
+    const newView = Boolean(got) && asked > quietViewAsk;
+    if (newView) quietViewAsk = asked;
+    const newSaid = Array.isArray(list) && asked > quietSaidAsk;
+    if (newSaid) quietSaidAsk = asked;
+    const view = newView ? got : kept?.view;
+    if (!view) return;
     // The golem as the newest feed has it, so its working line follows the Board.
     const now = allPanes(feed).find((p) => p.workshopId === g.workshopId && p.golemId === g.golemId) || g;
-    drawQuiet(panel, now, view, Array.isArray(list) ? list : [], { fetched: Boolean(fresh) });
+    drawQuiet(panel, now, view, newSaid ? list : kept?.said || [], { fetched: newView });
   }
 
   /** David's last five messages and answers (and the one a push points at); overlord-to-overlord ones fold into "Between overlords". */
@@ -2095,9 +2117,23 @@
     // The newest chat fetched for this golem, not the one the sheet opened with.
     const newest = quietShown?.key === quietKey(g) ? { quiet: quietShown.view, said: quietShown.said } : {};
     const cached = about.reuse && sheetData?.ref === ref ? { ...sheetData, ...newest } : null;
+    const asked = cached ? 0 : ++quietAsked;
+    let missed = false;
     if (cached) ({ history, said, quiet } = cached);
-    else [history, said, quiet] = await Promise.all([api("GET", `/api/history/${ref}`).then((got) => opened("history", feed?.accountId, g.workshopId, g.golemId, got)).catch(() => []), api("GET", `/api/said/${ref}`).catch(() => []).then((list) => openSaid(g, list)), loadQuiet(g).catch(() => null)]);
-    sheetData = { ref, history, said, quiet };
+    else [history, said, quiet] = await Promise.all([api("GET", `/api/history/${ref}`).then((got) => opened("history", feed?.accountId, g.workshopId, g.golemId, got)).catch(() => []), api("GET", `/api/said/${ref}`).catch(() => null).then((list) => openSaid(g, list)), loadQuiet(g).catch(() => null)]);
+    if (!cached) {
+      const kept = quietShown?.key === quietKey(g) ? quietShown : null;
+      // No answer this time, or a newer one came while this one was on its way: the chat this phone has stands.
+      if (kept && (!quiet || asked < quietViewAsk)) {
+        missed = !quiet;
+        quiet = kept.view;
+      } else if (quiet) quietViewAsk = asked;
+      // The same for the said list: a failed or older one never takes bubbles off.
+      if (kept && (!said || asked < quietSaidAsk)) said = kept.said;
+      else if (said) quietSaidAsk = asked;
+      said ||= [];
+    }
+    sheetData = { ref, history, said, quiet, about: about.reuse ? sheetData?.about : about };
     const marks = { done: "✓", current: "▸", pending: "·" };
     const asks = asksOf(g);
     const parts = QuietChat.sheetParts(Boolean(quiet));
@@ -2152,6 +2188,8 @@
     // A chat opened afresh is placed as he left it on this phone (rule 4); none saved: the newest.
     if (quiet && quietPanel && !carried) QuietChat.keeper(quietPanel).opening = loadPlace(quietKey(g));
     if (quiet && quietPanel) drawQuiet(quietPanel, g, quiet, said, { fetched: true });
+    // A change that came while this sheet was on its way had no panel to land in.
+    if (!cached && !missed && quietStale()) quietArrived().catch(() => {});
     // A tap on the dimmed backdrop closes it.
     sheet.onclick = (e) => {
       if (e.target === sheet) closeSheet();
@@ -2258,6 +2296,7 @@
   }
   // Leaving the app saves the chat's place; back in front, it is placed as on opening once its feed is fetched again (rule 4).
   document.addEventListener("visibilitychange", async () => {
+    if (document.visibilityState === "visible") quietMissed();
     const panel = !sheet.hidden && document.getElementById("sheet-quiet");
     const keep = panel?.chatKeeper;
     if (!keep) return;
@@ -3716,10 +3755,12 @@
     let opened = false;
     events.addEventListener("open", () => {
       if (opened) (again(true), enroll?.refresh());
+      if (opened) quietMissed();
       opened = true;
     });
     events.addEventListener("feed", () => again(false));
     // The Orchestrator's Quiet feed changed: only an open chat fetches it.
+    events.addEventListener("quiet", quietMissed);
     events.addEventListener("quiet", () => quietArrived().catch(() => {}));
   }
 
