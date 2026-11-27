@@ -10,6 +10,35 @@
   // Bubbles from one side this close together share a group (no gap, one tail).
   const GROUP_MS = 5 * 60e3;
 
+  // A compaction shows running at most this long, and one asked from Chat or Mobile waits this long to start (golemd's PENDING_MS).
+  const COMPACT_STALL_MS = 10 * 60e3;
+  // The commands that act on the context: a notice shows each, never a message of the operator's.
+  const CONTEXT_COMMAND = /^\s*\/(compact|clear)(?=\s|$)/i;
+  const contextCommand = (text) => CONTEXT_COMMAND.exec(String(text ?? ""))?.[1].toLowerCase() || null;
+
+  const spent = (ms) => {
+    const seconds = Math.max(1, Math.round(ms / 1000));
+    return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  };
+
+  /** A notice entry as shown: { state: queued|running|done|failed|stalled|info, label }; a running one past its limit reads stalled with no write. */
+  function notice(entry, now = Date.now()) {
+    const age = now - Date.parse(entry.since || entry.at);
+    const clear = entry.event === "clear";
+    if (entry.event === "compact") {
+      if (entry.state === "queued") return entry.held || age < QUEUED_MS ? { state: "queued", label: "Compaction queued" } : { state: "stalled", label: "Compaction did not run" };
+      if (entry.state === "running") return age < COMPACT_STALL_MS ? { state: "running", label: "Compacting context" } : { state: "stalled", label: "Compaction has not finished" };
+      if (entry.state === "failed") return { state: "failed", label: "Compaction failed" };
+      return { state: "done", label: `Context compacted${Number(entry.ms) > 0 ? ` in ${spent(entry.ms)}` : ""}` };
+    }
+    if (clear && entry.state === "queued") return entry.held || age < QUEUED_MS ? { state: "queued", label: "Context reset queued" } : { state: "stalled", label: "Context reset did not run" };
+    if (clear && entry.state === "failed") return { state: "failed", label: "Context reset failed" };
+    if (clear) return { state: "done", label: "Context cleared" };
+    if (entry.event === "restart") return { state: "info", label: "Golemworks restarted" };
+    if (entry.event === "stopped") return { state: "info", label: "Turn stopped" };
+    return { state: "info", label: String(entry.text || "") };
+  }
+
   const words = (text) => String(text ?? "").replace(/\s+/g, " ").trim();
   const count = (files) => (Array.isArray(files) ? files.length : 0);
   // golemd saves a file under its own safe name, so a copy matches on the words and how many files.
@@ -18,9 +47,12 @@
   // A sealed message's words as sent (public/acts.js); its text may be a stand-in such as "(1 attachment)".
   const saidWords = (s) => (typeof s.words === "string" ? s.words : typeof s.text === "string" ? s.text : "");
 
+  // Held or not sent: still his to see and retry, even a /compact.
+  const notGone = (s) => s.delivery === "queued" || s.delivery === "failed";
+
   /** Messages sent from here (said: the sheet's opened thread) against their copies in the feed: { waiting: the ones not shown yet, as queued entries, oldest first; sent: feed seq -> the said entry it copies }. */
   function pair(said, entries, now = Date.now()) {
-    const mine = (Array.isArray(said) ? said : []).filter((s) => s && s.kind === "message" && (saidWords(s).trim() || count(s.files))).map((s) => ({ s, at: Date.parse(s.at) || 0, key: key(saidWords(s), s.files), used: false }));
+    const mine = (Array.isArray(said) ? said : []).filter((s) => s && s.kind === "message" && (saidWords(s).trim() || count(s.files)) && (!contextCommand(saidWords(s)) || notGone(s))).map((s) => ({ s, at: Date.parse(s.at) || 0, key: key(saidWords(s), s.files), used: false }));
     const sent = new Map();
     // Newest copy first, each to the newest same-words message at most a queued spell before it: a lost one takes no later copy.
     const copies = (Array.isArray(entries) ? entries : []).filter((e) => e.kind === "you" && e.via === "mobile");
@@ -69,7 +101,7 @@
   const queued = (said, entries, now) => pair(said, entries, now).waiting;
 
   /** The feed then the queued messages, oldest first, as { day } separators and bubbles { side, kind, text, at, state?, from?, files?, said?, replyTo?, first, last }; sent: pair's, so a feed copy carries the said entry it copies; extra: pair's stray and replies' entries, merged in by time (a reply to a queued message after it). */
-  function conversation(entries, waiting = [], { dayOf = (iso) => String(iso).slice(0, 10), sent = new Map(), extra = [] } = {}) {
+  function conversation(entries, waiting = [], { dayOf = (iso) => String(iso).slice(0, 10), sent = new Map(), extra = [], now = Date.now() } = {}) {
     const out = [];
     let day = null;
     let prev = null;
@@ -78,6 +110,14 @@
     const merged = [...byTime(Array.isArray(entries) ? entries : [], extra.filter((e) => !queuedIds.has(e.replyTo))), ...(Array.isArray(waiting) ? waiting : []), ...late];
     // A turn's done line draws nothing in a chat: the reply above it already ended the turn.
     for (const entry of merged) {
+      // A machine event: a gray line of its own, from no side.
+      if (entry.kind === "notice") {
+        const label = dayOf(entry.at);
+        if (label !== day) (out.push({ day: label }), (day = label));
+        out.push({ side: "center", kind: "notice", at: entry.at, event: entry.event, ...notice(entry, now), first: true, last: true });
+        prev = null;
+        continue;
+      }
       if (!["you", "orchestrator", "note"].includes(entry.kind) || (!String(entry.text ?? "").trim() && !count(entry.files) && !count(entry.said?.files))) continue;
       const label = dayOf(entry.at);
       if (label !== day) {
@@ -196,5 +236,5 @@
     return rows.findIndex((r) => r.side === "them" && Date.parse(r.at) > seen);
   }
 
-  return { pair, queued, replies, conversation, sheetParts, keyboard, keeper, sameStart, firstUnseen, NEAR_END, QUEUED_MS };
+  return { notice, contextCommand, COMPACT_STALL_MS, pair, queued, replies, conversation, sheetParts, keyboard, keeper, sameStart, firstUnseen, NEAR_END, QUEUED_MS };
 });

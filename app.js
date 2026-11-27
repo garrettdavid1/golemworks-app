@@ -1837,7 +1837,12 @@
       h("span", { class: "note play-error", role: "status" }),
     ]);
 
+  /** A machine event: a gray line across the chat, from neither side; its icon by state (a spinner while it runs). */
+  const noticeNode = (b) =>
+    h("div", { class: "chat-notice", "data-state": b.state, "data-event": b.event }, [h("span", { class: "chat-notice-icon", "aria-hidden": "true" }), h("span", { class: "chat-notice-label" }, b.label), h("time", { datetime: b.at }, clockTime(b.at))]);
+
   function bubbleNode(b, name, replied = new Set(), voiceFrom = null) {
+    if (b.kind === "notice") return noticeNode(b);
     const meta = [h("time", { datetime: b.at }, clockTime(b.at))];
     if (b.side === "me") {
       if (b.from === "desktop") meta.unshift(h("span", {}, "Desktop"));
@@ -1867,7 +1872,7 @@
     const extra = [...stray, ...QuietChat.replies(said, view.entries)];
     // Nothing new: left as it is, so a selection or a scroll position survives a poll.
     const voiceFrom = view.voice && typeof VoicePlay !== "undefined" ? g.workshopId : null;
-    const drawn = JSON.stringify([new Date().toDateString(), g.state, voiceFrom, view.entries, waiting, [...sent].map(([seq, s]) => [seq, s.id]), extra.map((e) => [e.at, e.replyTo || e.said?.id, e.text, e.said?.delivery])]);
+    const drawn = JSON.stringify([new Date().toDateString(), g.state, voiceFrom, view.entries, waiting, [...sent].map(([seq, s]) => [seq, s.id]), extra.map((e) => [e.at, e.replyTo || e.said?.id, e.text, e.said?.delivery]), view.entries.filter((e) => e.kind === "notice").map((e) => QuietChat.notice(e).label)]);
     const opening = Boolean(keep.opening && fetched);
     if (panel.quietDrawn === drawn && !opening) return;
     panel.quietDrawn = drawn;
