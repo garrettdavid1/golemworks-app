@@ -88,6 +88,7 @@
     toastNode.classList.toggle("error", error);
     toastNode.classList.toggle("bare", tabs.hidden);
     toastNode.hidden = false;
+    liftToast();
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {
       toastNode.hidden = true;
@@ -95,6 +96,110 @@
       toastExpire = null;
       left?.();
     }, action?.ms || (error ? 6000 : 3500));
+  }
+
+  /** Over an open chat the toast sits above its message row, never on the words typed there. */
+  function liftToast() {
+    const row = sheet.hidden ? null : sheet.querySelector(".chat-form");
+    const frame = row && toastNode.offsetParent;
+    toastNode.style.bottom = frame ? `${Math.max(0, frame.getBoundingClientRect().bottom - row.getBoundingClientRect().top) + 8}px` : "";
+  }
+
+  // ---------- sends that did not go ----------
+
+  const sendErrors = new Map(); // draft or ask key -> why the last send from it did not go
+  const heldDrafts = new Map(); // ask key -> the draft of an answer the hub holds
+  const askIdOf = (ask) => ask.askId || ask.id;
+  // A held answer's queue key, as the chat keys each question of a split menu ("<ask>~<n>").
+  const unsentKey = (u) => `${u.workshopId}:${u.askId}${Number.isInteger(u.part) ? `~${u.part}` : ""}`;
+  /** The answer to this need the hub still holds, or could not deliver (feed.unsent), or null. */
+  const unsentOf = (ask) => (feed?.unsent || []).find((u) => u.askId && unsentKey(u) === (Number.isInteger(ask.part) ? `${ask.workshopId}:${askIdOf(ask)}~${ask.part}` : `${ask.workshopId}:${askIdOf(ask)}`)) || null;
+  /** A sealed send past golemd's 15 minutes cannot go again as it is. */
+  const canRetry = (u) => !u.refused && !(u.retryUntil && Date.now() > u.retryUntil);
+  const QUEUED_NOTE = "Waiting for your desktop. Sending when it is back.";
+  const failedNote = (error) => `Not sent: ${error || "your desktop stayed offline"}.`;
+
+  /** Retry (while it can still go) and Dismiss for a send the hub holds as failed; box: where a message that cannot go again puts its words back. */
+  const failedActions = (u, { box = null, text = "" } = {}) => [
+    canRetry(u) ? h("button", { type: "button", class: "small", onclick: () => resend(u.workshopId, u.id) }, "Retry") : null,
+    !canRetry(u) && box && text ? h("button", { type: "button", class: "small", onclick: () => {
+      drafts.set(box, { option: null, text });
+      const field = sheet.querySelector(".message textarea");
+      if (field) field.value = text;
+      dropSend(u.workshopId, u.id);
+    } }, "Edit") : null,
+    h("button", { type: "button", class: "small", onclick: () => dropSend(u.workshopId, u.id) }, "Dismiss"),
+  ].filter(Boolean);
+  /** What a said entry (a message the hub holds or could not send) offers: its sealed copy's age counts as the hub counts it. */
+  const saidActions = (s) => failedActions({ workshopId: s.workshopId, id: s.id, refused: s.refused, retryUntil: (feed?.unsent || []).find((u) => u.id === s.id)?.retryUntil }, { box: s.kind === "message" ? `message:${s.workshopId}/${s.golemId}` : null, text: s.text });
+
+  function fillErrors(slot) {
+    const rows = JSON.parse(slot.dataset.keys).flatMap((key) => {
+      const own = sendErrors.get(key);
+      // A whole menu's card also shows any one question's answer that did not go.
+      const held = (feed?.unsent || []).filter((u) => u.state === "failed" && u.askId && (unsentKey(u) === key || `${u.workshopId}:${u.askId}` === key));
+      return [
+        own ? h("div", { class: "send-error", role: "alert" }, [h("span", {}, own), h("button", { type: "button", class: "small", onclick: () => clearError(key) }, "Dismiss")]) : null,
+        ...held.map((u) => h("div", { class: "send-error", role: "alert" }, [h("span", {}, failedNote(u.error)), ...failedActions(u)])),
+      ];
+    });
+    slot.replaceChildren(...rows.filter(Boolean));
+  }
+
+  /** The inline row where an error for these keys shows: above the message box or inside the card, never over either. */
+  function errorSlot(...keys) {
+    const slot = h("div", { class: "send-errors", "data-keys": JSON.stringify(keys.filter(Boolean)) });
+    fillErrors(slot);
+    return slot;
+  }
+
+  const slotsFor = (key) => [...document.querySelectorAll(".send-errors")].filter((slot) => JSON.parse(slot.dataset.keys).includes(key));
+
+  /** Shown in the key's row; with none on screen, as a toast. */
+  function sayError(key, text) {
+    sendErrors.set(key, text);
+    const slots = slotsFor(key);
+    for (const slot of slots) fillErrors(slot);
+    if (!slots.some((slot) => slot.getClientRects().length)) toast(text, true);
+  }
+
+  function clearError(key) {
+    sendErrors.delete(key);
+    for (const slot of slotsFor(key)) fillErrors(slot);
+  }
+
+  /** Retry: the same words go again from the hub. */
+  async function resend(workshopId, id) {
+    try {
+      await withFaceId(() => api("POST", `/api/said/${encodeURIComponent(workshopId)}/${encodeURIComponent(id)}/retry`, {}));
+    } catch (error) {
+      toast(error.message, true);
+    }
+    await redrawSends();
+  }
+
+  async function dropSend(workshopId, id) {
+    try {
+      await api("DELETE", `/api/said/${encodeURIComponent(workshopId)}/${encodeURIComponent(id)}`);
+    } catch (error) {
+      toast(error.message, true);
+    }
+    await redrawSends();
+  }
+
+  let heldMark = "[]";
+  /** A held send changed: error rows are filled again, and a golem's sheet with nothing being typed is drawn again (the chat redraws itself). */
+  function redrawHeld() {
+    const mark = JSON.stringify((feed?.unsent || []).map((u) => [u.id, u.state]));
+    if (mark === heldMark) return;
+    heldMark = mark;
+    for (const slot of document.querySelectorAll(".send-errors")) fillErrors(slot);
+    if (sheetGolem && !sheet.hidden && !sheet.querySelector(".chat-sheet") && ![...sheet.querySelectorAll("textarea")].some((box) => box.value)) openGolem(sheetGolem).catch(() => {});
+  }
+
+  async function redrawSends() {
+    await load();
+    if (sheetGolem && !sheet.hidden) await openGolem(sheetGolem);
   }
 
   function h(tag, attrs = {}, children = []) {
@@ -469,6 +574,8 @@
       if (hasGolems()) Golems.observe(allPanes(feed), allPanes(next), { wasLoaded: Boolean(feed), onBoard: () => true, order: (panes) => panes });
       feed = next;
       pruneAskMarks();
+      markAnswered();
+      redrawHeld();
       // Seen sealed with the key held: from now on this phone sends tasks only sealed and trusts no plaintext list.
       if (feed?.encryption?.tasksSealed && taskReader && !taskReader.sticky(myAccount())) sealer().then((acts) => acts && taskReader.markSealed(acts.accountId()), () => {});
       // A Stop requiring sealed by a device holding the key (never the hub's own word) lets plaintext tasks back in.
@@ -651,7 +758,7 @@
   function askBody(ask) {
     const key = `${ask.workshopId}:${ask.id}`;
     // A workshop that is connected but not sending: this need is as of its last summary and may already be answered.
-    const answerable = !ask.answeredAt && ask.online !== false && !ask.stale && (ask.options?.length || ask.reply);
+    const answerable = canAnswer(ask);
     const [label, kindDoes] = KIND[ask.kind] || KIND.unknown;
     // A question with no options to pick takes words only; its why says so.
     const questions = answerable && ask.reply ? AskContext.menu(ask) : null;
@@ -670,7 +777,8 @@
       ask.why && !ask.answeredAt && !questions ? h("div", { class: "item-why" }, ask.why) : null,
       answerable ? answerForm(ask, key, context) : ask.options?.length ? h("div", { class: "item-options" }, context.options.map((o) => h("span", { class: "option" }, o.label))) : null,
       ...(answerable ? [] : AskContext.after(h, context)),
-      answerable ? null : h("div", { class: "item-foot" }, `${where(ask)}${ask.answeredAt ? `You answered${ask.answer ? ` "${ask.answer}"` : ""} ${ago(ask.answeredAt)}; waiting for the golem` : ask.online === false ? "Workshop offline" : ask.stale ? staleNote(ask) : ask.why ? "" : "Nothing to answer here"}`),
+      answerable ? null : h("div", { class: "item-foot" }, answerFoot(ask)),
+      errorSlot(askKeyOf(ask)),
     ]);
   }
 
@@ -681,8 +789,10 @@
       h("div", { class: "item-head" }, [h("span", { class: "kind ask gate" }, "Paused"), h("span", { class: "who" }, `All golems on ${w.name}`), p.since ? h("span", {}, ago(p.since)) : null]),
       h("div", { class: "item-text" }, `Paused${p.by ? ` by ${p.by}` : ""}: ${p.reason || "no reason given"}`),
       h("div", { class: "item-does" }, "Unpause lets every golem go on and sends what was held, as the desktop's Unpause does."),
+      errorSlot(`paused:${w.id}`),
       w.online === false ? h("div", { class: "item-foot" }, "Workshop offline") : h("div", { class: "answer-foot" }, [h("button", { type: "button", class: "primary small", onclick: async (e) => {
         e.target.disabled = true;
+        clearError(`paused:${w.id}`);
         try {
           const out = await withFaceId(async () => {
             const acts = await sealerFor(w.id);
@@ -692,7 +802,7 @@
           });
           toast(out.unconfirmed ? "Sent; the workshop has not confirmed it yet" : `Unpaused ${w.name}`);
         } catch (error) {
-          toast(error.message, true);
+          sayError(`paused:${w.id}`, error.message);
         }
         await load();
       } }, "Unpause")]),
@@ -702,9 +812,10 @@
   async function snooze(ask, hours) {
     try {
       await api("POST", `/api/asks/${encodeURIComponent(ask.workshopId)}/${encodeURIComponent(ask.askId || ask.id)}/snooze`, { hours });
+      clearError(askKeyOf(ask));
       toast(`Snoozed ${ask.golem} for ${hours} hours`);
     } catch (error) {
-      toast(error.message, true);
+      sayError(askKeyOf(ask), error.message);
     }
     await load();
   }
@@ -712,9 +823,11 @@
   /** What a reply box asks for, by the kind of need. */
   const replyPlaceholder = (ask) => (ask.kind === "gate" ? "A note (Hold needs one)" : ask.kind === "permission" ? "Why not (a reply alone says No)" : ask.kind === "question" ? (AskContext.menu(ask) ? "Words to send with your picks, or your own answer" : ask.options?.length ? "Words to send with your pick, or your own answer" : "Your answer, in your words") : ask.kind === "stopped" ? "A message for when it is back (optional)" : ask.options?.length ? "Write a reply, or a note with your pick" : "Write a reply");
   /** A need the phone can answer now: not answered, its workshop online and updating, and options or a reply to give. */
-  const canAnswer = (ask) => Boolean(!ask.answeredAt && ask.online !== false && !ask.stale && (ask.options?.length || ask.reply));
+  const canAnswer = (ask) => Boolean(!ask.answeredAt && !gone(ask) && !ask.stale && (ask.options?.length || ask.reply));
+  /** Offline past the moment a restart takes: a workshop that only just dropped (away) is still written to, and the hub holds the send. */
+  const gone = (x) => x.online === false && !x.away;
   /** Why a need cannot be answered here, for its foot line. */
-  const answerFoot = (ask) => `${where(ask)}${ask.answeredAt ? `You answered${ask.answer ? ` "${ask.answer}"` : ""} ${ago(ask.answeredAt)}; waiting for the golem` : ask.online === false ? "Workshop offline" : ask.stale ? staleNote(ask) : ask.why ? "" : "Nothing to answer here"}`;
+  const answerFoot = (ask) => `${where(ask)}${unsentOf(ask)?.state === "queued" ? `Queued. ${QUEUED_NOTE}` : ask.answeredAt ? `You answered${ask.answer ? ` "${ask.answer}"` : ""} ${ago(ask.answeredAt)}; waiting for the golem` : gone(ask) ? "Workshop offline" : ask.stale ? staleNote(ask) : ask.why ? "" : "Nothing to answer here"}`;
 
   /** A need in the Orchestrator's chat it cannot answer now (answered and waiting for the golem, offline, not updating): compact, in the chat's style, over the message row. An answerable one leads instead (askFirstCard). */
   function chatNeed(ask) {
@@ -725,6 +838,7 @@
       ask.detail ? detailBlock(ask.detail) : null,
       ask.why && !ask.answeredAt && !AskContext.menu(ask) ? h("div", { class: "chat-need-why" }, ask.why) : null,
       answerFoot(ask) ? h("div", { class: "item-foot" }, answerFoot(ask)) : null,
+      errorSlot(askKeyOf(ask)),
     ]);
   }
 
@@ -842,9 +956,10 @@
   async function askForContext(ask, g = null) {
     try {
       await api("POST", `/api/asks/${encodeURIComponent(ask.workshopId)}/${encodeURIComponent(ask.askId || ask.id)}/context`);
+      clearError(askKeyOf(ask));
       toast("Asked for its context; the new question comes in its place");
     } catch (error) {
-      toast(error.message, true);
+      sayError(askKeyOf(ask), error.message);
     }
     await load();
     if (g && sheetGolem === g) openGolem(g);
@@ -911,7 +1026,7 @@
       ])
       : null;
     const send = h("button", { type: "submit", class: "primary small", disabled: busy || (!ready && !box) }, busy ? "Sending" : "Send");
-    form.append(...[options, ...AskContext.after(h, context), bare, box, attach, later, h("div", { class: "answer-foot" }, [send])].filter(Boolean));
+    form.append(...[options, ...AskContext.after(h, context), bare, box, attach, later, errorSlot(key), h("div", { class: "answer-foot" }, [send])].filter(Boolean));
     return form;
   }
 
@@ -921,10 +1036,17 @@
     const draft = drafts.get(key) || { text: "", option: null };
     // The option or a menu's ticks, with the words beside them; without words, every question needs its pick.
     const { body, error } = Thread.answerBody(draft, AskContext.menu(ask), { files: (attached.get(files) || []).length });
-    if (error) return toast(error, true), false;
+    if (error) return sayError(askKeyOf(ask), error), false;
+    sendErrors.delete(askKeyOf(ask));
     // In flight: the 10-second refresh keeps this form disabled, so a second tap cannot send it again.
     sending.add(key);
+    inFlight.add(askKeyOf(ask));
+    // Its card goes at once; a refused or failed send brings it back.
+    const askKey = askKeyOf(ask);
+    answeredAsks.set(askKey, new Date().toISOString());
+    markAnswered();
     render();
+    refreshQuiet().catch(() => {});
     let sent = false;
     try {
       const out = await withFaceId(async () => {
@@ -933,27 +1055,33 @@
         const label = body.option !== undefined ? { label: ask.options[body.option] } : {};
         // One question of a several-question menu: golemd holds its answer until the last (part).
         const part = Number.isInteger(ask.part) ? { part: ask.part } : {};
-        const payload = acts ? sealedBody(acts, ask.workshopId, "answer", { askId: ask.askId || ask.id, golemId: ask.golemId, ...body, ...label, ...part }, files, ids) : { ...body, ...part, ...(ids.length ? { attachments: ids } : {}) };
+        const payload = acts ? { ...sealedBody(acts, ask.workshopId, "answer", { askId: ask.askId || ask.id, golemId: ask.golemId, ...body, ...label, ...part }, files, ids), ...part } : { ...body, ...part, ...(ids.length ? { attachments: ids } : {}) };
         return api("POST", `/api/asks/${encodeURIComponent(ask.workshopId)}/${encodeURIComponent(ask.askId || ask.id)}/answer`, payload);
       });
+      // Held, not delivered: the words come back to the card if it does not go.
+      if (out.queued) heldDrafts.set(askKey, draft);
       drafts.delete(key);
       await keepSent(out.said, attached.get(files));
       clearAttached(files);
       toast(out.saved ? `Saved; it goes to ${ask.golem} with the other answers (${out.left ?? "more"} to answer)` : sentNote(out, ask.golem));
-      // Until golemd closes it, the chat does not lead with it again (G-110).
-      answeredAsks.set(askKeyOf(ask), new Date().toISOString());
       sent = true;
     } catch (error) {
+      answeredAsks.delete(askKey);
+      for (const a of feed?.asks || []) if (askKeyOf(a) === askKey) a.answeredAt = null;
       forgetUploads(files, error);
-      toast(error.message, true);
+      sendErrors.set(askKey, `Not sent. ${error.message}`);
     }
     sending.delete(key);
+    inFlight.delete(askKey);
     await load();
+    refreshQuiet().catch(() => {});
+    if (sendErrors.has(askKey)) sayError(askKey, sendErrors.get(askKey));
     return sent;
   }
 
   /** What a send says: delivered, held while golems are paused, or sent with no word back from the workshop. */
   function sentNote(out, who) {
+    if (out.queued) return QUEUED_NOTE;
     if (out.unconfirmed) return `Sent to ${who}; the workshop has not confirmed it yet, check the desktop before sending again`;
     if (out.held) return `Held for ${who}: golems are paused on the desktop`;
     return `Sent to ${who}`;
@@ -966,11 +1094,13 @@
     const replies = t.replies || [];
     const line = (speaker, at, text, cls, read = null) => h("li", { class: cls }, [h("span", { class: "speaker" }, speaker), h("div", { class: "words" }, linked(text)), h("time", { datetime: at }, clockTime(at)), read]);
     const quiet = Date.now() - Date.parse(t.at) >= NO_REPLY_MS;
+    const held = t.delivery === "queued" || t.delivery === "failed";
     return h("ol", { class: "thread", "data-said": t.id, "aria-label": `Your message to ${who}` }, [
       line("You", t.at, t.text, "said-line", t.delivery === "unconfirmed" ? h("span", { class: "note" }, "Sent, not confirmed") : null),
+      held ? h("li", { class: "said-held" }, heldLine(t)) : null,
       t.files?.length ? h("li", { class: "said-files" }, sentFiles(t)) : null,
       ...replies.map((r) => line(who, r.at, r.text, "reply-line", readControls(`reply:${r.id}`, r.text, who))),
-      replies.length ? null : h("li", { class: "reply-line pending" }, [h("span", { class: "speaker" }, who), h("div", { class: "words" }, quiet ? "No reply yet" : "Waiting for a reply")]),
+      replies.length || held ? null : h("li", { class: "reply-line pending" }, [h("span", { class: "speaker" }, who), h("div", { class: "words" }, quiet ? "No reply yet" : "Waiting for a reply")]),
     ]);
   }
 
@@ -1116,7 +1246,7 @@
   function allPanes(source = feed) {
     const all = [];
     for (const w of source?.workshops || []) {
-      for (const g of w.golems) all.push({ ...g, golemId: g.id, id: paneKey(w.id, g.id), name: paneKey(w.id, g.id), kind: "claude", role: g.type === "overlord" ? "orchestrator" : undefined, workshopId: w.id, workshop: w.name, online: w.online });
+      for (const g of w.golems) all.push({ ...g, golemId: g.id, id: paneKey(w.id, g.id), name: paneKey(w.id, g.id), kind: "claude", role: g.type === "overlord" ? "orchestrator" : undefined, workshopId: w.id, workshop: w.name, online: w.online, away: w.away });
     }
     return all;
   }
@@ -1500,11 +1630,14 @@
     const answering = lead?.reply ? lead : null;
     const form = h("form", { class: "answer message", onsubmit: async (e) => {
       e.preventDefault();
+      sendErrors.delete(key);
+      if (lead) sendErrors.delete(askKeyOf(lead));
+      for (const slot of form.querySelectorAll(".send-errors")) fillErrors(slot);
       if (answering) {
         // Settled elsewhere since the sheet drew (the desktop, a snooze): not sent, and the words stay in the box.
         const ask = chatQueue(g).find((a) => a.id === answering.id);
         if (!ask || !canAnswer(ask)) {
-          toast("That need was settled elsewhere; your words are still in the box", true);
+          sendErrors.set(key, "That need was settled elsewhere; your words are still in the box.");
           return openGolem(g);
         }
         const askKey = askKeyOf(ask);
@@ -1516,9 +1649,9 @@
         return;
       }
       // A question with options only: the row has nothing to send until it is answered or put off.
-      if (lead) return toast("Pick an option, or Not now", true);
+      if (lead) return sayError(askKeyOf(lead), "Pick an option, or Not now.");
       const text = box.value.trim();
-      if (!text && !attached.get(key)?.length) return toast("Write a message or attach a file first", true);
+      if (!text && !attached.get(key)?.length) return sayError(key, "Write a message or attach a file first.");
       for (const control of form.querySelectorAll("button, textarea")) control.disabled = true;
       try {
         const out = await withFaceId(async () => {
@@ -1538,18 +1671,21 @@
         return openGolem(g);
       } catch (error) {
         forgetUploads(key, error);
-        toast(error.message, true);
+        sayError(key, `Not sent. ${error.message}`);
       }
       for (const control of form.querySelectorAll("button, textarea")) control.disabled = false;
     } });
     let slash = null; // the / list on this box (public/slash-commands.js), when it has one
     const box = h("textarea", { rows: quiet ? "1" : "3", maxlength: String(MAX_SAY), "aria-label": `Message ${g.label || g.name}`, placeholder: `Message ${g.label || g.name}` });
-    const offline = g.online === false;
+    const offline = gone(g);
+    const foot = offline ? "Workshop offline" : g.online === false ? "Desktop not connected. A message waits and goes when it is back." : null;
     // Options only: the box waits, so no plain message slips past the question.
     const pickOnly = Boolean(lead && !answering);
-    if (offline || pickOnly) box.disabled = true;
+    // The row's words and files may be going with an answer: nothing else is sent or typed until it lands.
+    const holding = Boolean(quiet) && answerGoing(g);
+    if (offline || pickOnly || holding) box.disabled = true;
     // One question of a several-question menu takes no files: they go with a reply.
-    const takesFiles = !offline && !g.namesOnly && !pickOnly && !Number.isInteger(answering?.part);
+    const takesFiles = !offline && !g.namesOnly && !pickOnly && !holding && !Number.isInteger(answering?.part);
     if (quiet) {
       // A chat's composer: + to attach, the words, a round Send; picked files show above the row.
       const attach = takesFiles ? attachBar(key, { plus: true }) : null;
@@ -1562,20 +1698,23 @@
         box.placeholder = answering.options?.length && ["ask", "flag", "status", "unknown"].includes(answering.kind) ? "Or write your own answer" : replyPlaceholder(answering);
         box.setAttribute("aria-label", `Reply to ${answering.question}`);
       } else if (pickOnly) box.placeholder = "Pick an option above, or Not now";
-      form.append(...[attach?.bar, h("div", { class: "chat-composer" }, [attach?.button, box, h("button", { type: "submit", class: "primary chat-send", disabled: offline || pickOnly, "aria-label": answering ? "Send answer" : "Send" }, "➤")].filter(Boolean)), offline ? h("span", { class: "item-foot" }, "Workshop offline") : null].filter(Boolean));
+      if (holding) box.placeholder = "Sending your answer";
+      form.append(...[errorSlot(key, lead && askKeyOf(lead)), attach?.bar, h("div", { class: "chat-composer" }, [attach?.button, box, h("button", { type: "submit", class: "primary chat-send", disabled: offline || pickOnly || holding, "aria-label": answering ? "Send answer" : "Send" }, "➤")].filter(Boolean)), foot ? h("span", { class: "item-foot" }, foot) : null].filter(Boolean));
       box.addEventListener("input", () => {
         box.style.height = "auto";
         // scrollHeight leaves out the border a border-box height includes: without it two lines show a scrollbar.
         box.style.height = `${Math.min(box.scrollHeight + box.offsetHeight - box.clientHeight, 140)}px`;
       });
-    } else form.append(...[box, takesFiles ? attachBar(key) : null].filter(Boolean), h("div", { class: "answer-foot" }, [h("span", { class: "item-foot" }, offline ? "Workshop offline" : g.namesOnly ? "Arrives as a message from you; its workspace takes attachments only at the desktop" : "Arrives as a message from you"), h("button", { type: "submit", class: "primary small", disabled: offline }, "Send")]));
+    } else form.append(...[box, takesFiles ? attachBar(key) : null, errorSlot(key)].filter(Boolean), h("div", { class: "answer-foot" }, [h("span", { class: "item-foot" }, foot ? foot : g.namesOnly ? "Arrives as a message from you; its workspace takes attachments only at the desktop" : "Arrives as a message from you"), h("button", { type: "submit", class: "primary small", disabled: offline }, "Send")]));
     // / lists the golem's own slash commands (its sealed commands record), over the chat's row or under the sheet's box; a picked one runs as a command, not a message.
     if (!offline && !g.namesOnly && !answering && !pickOnly && sealed && typeof SlashCommands !== "undefined") slash = SlashCommands.attach(box, { load: () => commandsOf(g), place: quiet ? form.querySelector(".chat-composer") : box.nextSibling });
     // The chat ends at its message row: the feed shows what was sent, so no thread under it. Over the row: the leading question, else the bar for put-off ones and any need it cannot answer.
     if (quiet) {
       if (lead) return [askFirstCard(lead, g, { count: split.lead.length, queue: [...split.lead, ...split.waited], form, rowKey: key }), form];
       const waits = split?.waited.length ? waitsBar(split.waited, g) : null;
-      return [waits || split?.rest.length ? h("div", { class: "chat-needs", role: "region", "aria-label": "Needs you" }, [waits, ...(split?.rest || []).map((a) => chatNeed(a, g))].filter(Boolean)) : null, form].filter(Boolean);
+      // An answered one shows only while its answer still waits for the desktop.
+      const shown = (split?.rest || []).filter((a) => !a.answeredAt || unsentOf(a)?.state === "queued");
+      return [waits || shown.length ? h("div", { class: "chat-needs", role: "region", "aria-label": "Needs you" }, [waits, ...shown.map((a) => chatNeed(a, g))].filter(Boolean)) : null, form].filter(Boolean);
     }
     return [h("h3", {}, "Message"), form, h("div", { id: "sheet-said" }, saidList(g, said, { focus: sheetFocus }))];
   }
@@ -1605,6 +1744,8 @@
   const heldAsks = new Set();
   const reopenedAsks = new Set();
   const answeredAsks = new Map(); // ask key -> when this phone answered it
+  const inFlight = new Set(); // ask keys whose answer is still going: their chat's message row waits
+  const answerGoing = (g) => chatAsks(g).some((a) => [...inFlight].some((key) => key.replace(/~d$/, "") === askKeyOf(a)));
   const landedAsks = new Set();
   /** The chat's asks (public/ask-first.js): lead blocks the chat, oldest first; waited sit in the bar; rest show as today, one answered here as answered. */
   const askSplit = (asks, { first = null } = {}) => AskFirst.split(asks.map((a) => (answeredAsks.has(askKeyOf(a)) && !a.answeredAt ? { ...a, answeredAt: answeredAsks.get(askKeyOf(a)) } : a)), { canAnswer, keyOf: askKeyOf, held: heldAsks, reopened: reopenedAsks, first });
@@ -1626,6 +1767,24 @@
     const draft = key && drafts.get(key);
     return key && (Number.isInteger(draft?.option) || draft?.picks?.some((p) => p?.length) || drafts.get(`message:${g.workshopId}/${g.golemId}`)?.text?.trim()) ? key : null;
   };
+  /** An answer sent from this phone shows as answered before golemd says so (a sealed feed never does). */
+  function markAnswered() {
+    // Not delivered: that question is open again, with Retry on it and the words back.
+    for (const u of feed?.unsent || []) {
+      if (u.state !== "failed" || !u.askId) continue;
+      const key = unsentKey(u);
+      answeredAsks.delete(key);
+      if (heldDrafts.has(key) && !drafts.has(key)) drafts.set(key, heldDrafts.get(key));
+      heldDrafts.delete(key);
+    }
+    for (const a of feed?.asks || []) {
+      const held = unsentOf(a);
+      // Still waiting: answered, on every phone.
+      if (held?.state === "failed") a.answeredAt = null;
+      else if (held) a.answeredAt ||= answeredAsks.get(askKeyOf(a)) || feed.now;
+      else if (answeredAsks.has(askKeyOf(a))) a.answeredAt ||= answeredAsks.get(askKeyOf(a));
+    }
+  }
   /** Marks for asks no longer in the feed go, so one asked again word for word leads again. */
   function pruneAskMarks() {
     const live = new Set((feed?.asks || []).map(askKeyOf));
@@ -1633,7 +1792,7 @@
     for (const marks of [heldAsks, reopenedAsks, answeredAsks]) for (const key of [...marks.keys()]) if (!live.has(key.replace(/~\d$/, ""))) marks.delete(key);
   }
   // The chat's needs as drawn, so a refresh that changes them draws the sheet again.
-  const needsMark = (g) => chatAsks(g).map((a) => `${a.id}:${(a.heldParts || []).join(".")}:${a.answeredAt || ""}:${a.waitedAt || ""}:${answeredAsks.has(askKeyOf(a))}:${a.online === false}:${Boolean(a.stale)}`).join("|");
+  const needsMark = (g) => chatAsks(g).map((a) => `${a.id}:${(a.heldParts || []).join(".")}:${a.answeredAt || ""}:${a.waitedAt || ""}:${answeredAsks.has(askKeyOf(a))}:${gone(a)}:${Boolean(a.stale)}:${unsentOf(a)?.state || ""}`).join("|") + `#${golemOf(g.workshopId, g.golemId)?.needsYou || ""}#${answerGoing(g)}`;
 
   /** The Orchestrator's Quiet feed opened for its sheet, or null: not the overlord, names only, a plaintext workshop (it never sends one), none or an empty one, or no key. */
   async function loadQuiet(g) {
@@ -1662,7 +1821,7 @@
   }
 
 
-  const BUBBLE_STATE = { sent: "✓ Sent", queued: "Queued", unconfirmed: "Sent, not confirmed" };
+  const BUBBLE_STATE = { sent: "✓ Sent", queued: "Queued", unconfirmed: "Sent, not confirmed", failed: "Not sent" };
 
   /** One bubble: his on the right with its state, the Orchestrator's replies and raised notes on the left; a push's message (data-said) lands on its reply, or on the message while none came. */
   // Play with the workshop's ElevenLabs voice, where its feed says it has a key; made here once the sealed feed is open.
@@ -1694,6 +1853,8 @@
       b.text.trim() ? bubbleText(b.text) : null,
       b.side !== "them" ? null : voiceFrom && b.seq ? playControls(voiceFrom, b.seq, name) : readControls(`chat:${b.at}|${b.text.length}`, b.text, name),
       h("div", { class: "bubble-meta" }, meta),
+      b.side === "me" && b.state === "queued" && b.said?.delivery === "queued" ? h("div", { class: "bubble-held" }, QUEUED_NOTE) : null,
+      b.state === "failed" ? h("div", { class: "bubble-held failed" }, [h("span", {}, failedNote(b.said.error)), h("div", { class: "send-actions" }, saidActions(b.said))]) : null,
     ]);
   }
 
@@ -1706,7 +1867,7 @@
     const extra = [...stray, ...QuietChat.replies(said, view.entries)];
     // Nothing new: left as it is, so a selection or a scroll position survives a poll.
     const voiceFrom = view.voice && typeof VoicePlay !== "undefined" ? g.workshopId : null;
-    const drawn = JSON.stringify([new Date().toDateString(), g.state, voiceFrom, view.entries, waiting, [...sent].map(([seq, s]) => [seq, s.id]), extra.map((e) => [e.at, e.replyTo || e.said?.id, e.text])]);
+    const drawn = JSON.stringify([new Date().toDateString(), g.state, voiceFrom, view.entries, waiting, [...sent].map(([seq, s]) => [seq, s.id]), extra.map((e) => [e.at, e.replyTo || e.said?.id, e.text, e.said?.delivery])]);
     const opening = Boolean(keep.opening && fetched);
     if (panel.quietDrawn === drawn && !opening) return;
     panel.quietDrawn = drawn;
@@ -1716,7 +1877,7 @@
     // Each row keyed by what it draws, so a redraw builds only the rows that changed.
     const rows = items.map((item) => (item.day
       ? { key: `day|${item.day}`, make: () => h("div", { class: "chat-day" }, h("span", {}, item.day)) }
-      : { key: JSON.stringify({ ...item, said: item.said?.id, replied: replied.has(item.said?.id), voiceFrom }), at: item.at, side: item.side, make: () => bubbleNode(item, name, replied, voiceFrom) }));
+      : { key: JSON.stringify({ ...item, said: item.said?.id, delivery: item.said?.delivery, error: item.said?.error, replied: replied.has(item.said?.id), voiceFrom }), at: item.at, side: item.side, make: () => bubbleNode(item, name, replied, voiceFrom) }));
     if (!items.length) rows.push({ key: `empty|${name}`, make: () => h("p", { class: "chat-empty" }, `Nothing between you and ${name} yet.`) });
     if (g.state === "working") rows.push({ key: `typing|${name}`, make: () => h("div", { class: "bubble them first last typing", role: "status", "aria-label": `${name} is working` }, [h("span"), h("span"), h("span")]) });
     // The panel is not live (a redraw would read every bubble again): the newest reply is announced on its own.
@@ -1859,7 +2020,11 @@
     if (!g || !panel || sheet.hidden || panel.dataset.golem !== quietKey(g)) return;
     // A need came, or was settled elsewhere: the sheet draws again (the row's words are kept in drafts).
     const body = sheet.querySelector(":scope > .chat-sheet");
-    if (body && body.dataset.needs !== needsMark(g)) return openGolem(allPanes(feed).find((p) => p.workshopId === g.workshopId && p.golemId === g.golemId) || g);
+    if (body && body.dataset.needs !== needsMark(g)) {
+      // Drawn from what the sheet already has, so the card comes or goes without waiting on a fetch; then the chat is fetched.
+      await openGolem(allPanes(feed).find((p) => p.workshopId === g.workshopId && p.golemId === g.golemId) || g, { reuse: true });
+      return refreshQuiet({ fetch: true, said });
+    }
     const asked = ++quietAsked;
     const cached = quietShown?.key === quietKey(g) ? quietShown : null;
     // A chat waiting to be placed fetches whoever asks (the app's own return poll overtakes the chat's fetch), so it is placed on the newest feed.
@@ -1877,11 +2042,18 @@
   }
 
   /** David's last five messages and answers (and the one a push points at); overlord-to-overlord ones fold into "Between overlords". */
+  /** Queued, or Not sent with its Retry and Dismiss, under a message or answer the hub holds; null otherwise. */
+  function heldLine(s) {
+    if (s.delivery !== "queued" && s.delivery !== "failed") return null;
+    const failed = s.delivery === "failed";
+    return h("div", { class: `bubble-held${failed ? " failed" : ""}` }, [h("span", {}, failed ? failedNote(s.error) : `Queued. ${QUEUED_NOTE}`), failed ? h("div", { class: "send-actions" }, saidActions(s)) : null]);
+  }
+
   function saidList(g, said, { focus = null, betweenOpen = false } = {}) {
     const { mine, between } = Thread.split(said, { focus });
     const own = (s) => s.kind === "message"
       ? threadLines(s, g.label || g.name)
-      : [h("time", { datetime: s.at }, `${ago(s.at)} · you answered`), h("div", { class: "status" }, linked(s.text)), s.files?.length ? h("div", { class: "said-files" }, sentFiles(s)) : null];
+      : [h("time", { datetime: s.at }, `${ago(s.at)} · ${s.delivery === "failed" ? "your answer, not sent" : s.delivery === "queued" ? "your answer, queued" : "you answered"}`), h("div", { class: "status" }, linked(s.text)), s.files?.length ? h("div", { class: "said-files" }, sentFiles(s)) : null, heldLine(s)];
     return [
       mine.length ? h("ul", { class: "history said" }, mine.map((s) => h("li", {}, own(s)))) : null,
       between.length ? h("details", { class: "between", open: betweenOpen }, [
@@ -1907,6 +2079,7 @@
     if (said && node && sheetGolem === g) node.replaceChildren(...saidList(g, said, { focus: sheetFocus, betweenOpen: Boolean(node.querySelector("details.between[open]")) }));
   }
 
+  let sheetData = null; // what the open sheet was drawn from: { ref, history, said, quiet }
   async function openGolem(g, about = {}) {
     sheetGolem = g;
     sheetFocus = about.said || null;
@@ -1914,7 +2087,12 @@
     let said = [];
     let quiet = null;
     const ref = `${encodeURIComponent(g.workshopId)}/${encodeURIComponent(g.golemId)}`;
-    [history, said, quiet] = await Promise.all([api("GET", `/api/history/${ref}`).then((got) => opened("history", feed?.accountId, g.workshopId, g.golemId, got)).catch(() => []), api("GET", `/api/said/${ref}`).catch(() => []).then((list) => openSaid(g, list)), loadQuiet(g).catch(() => null)]);
+    // The newest chat fetched for this golem, not the one the sheet opened with.
+    const newest = quietShown?.key === quietKey(g) ? { quiet: quietShown.view, said: quietShown.said } : {};
+    const cached = about.reuse && sheetData?.ref === ref ? { ...sheetData, ...newest } : null;
+    if (cached) ({ history, said, quiet } = cached);
+    else [history, said, quiet] = await Promise.all([api("GET", `/api/history/${ref}`).then((got) => opened("history", feed?.accountId, g.workshopId, g.golemId, got)).catch(() => []), api("GET", `/api/said/${ref}`).catch(() => []).then((list) => openSaid(g, list)), loadQuiet(g).catch(() => null)]);
+    sheetData = { ref, history, said, quiet };
     const marks = { done: "✓", current: "▸", pending: "·" };
     const asks = asksOf(g);
     const parts = QuietChat.sheetParts(Boolean(quiet));
@@ -1936,7 +2114,7 @@
         ]),
       ]),
       // The chat's needs sit over its message row (messageForm); a line only for a need with no card.
-      ...(parts.chat ? [g.needsYou && !asks.length ? h("p", { class: "card-attention chat-attention" }, ["Needs you: ", ...linked(g.needsYou)]) : null]
+      ...(parts.chat ? [g.needsYou && !asks.length ? h("p", { class: "card-attention chat-attention" }, ["Needs you: ", ...linked(g.needsYou), ". No card here: answer on the desktop."]) : null]
         : g.type === "overlord"
         ? [g.needsYou ? h("p", { class: "card-attention" }, ["Needs you: ", ...linked(g.needsYou)]) : null,
           // A sheet opened from a push leads with the question queue's first, to answer here as on its card (See all for the rest).

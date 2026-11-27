@@ -27,18 +27,20 @@
     for (const copy of [...copies].reverse()) {
       const at = Date.parse(copy.at) || 0;
       const k = key(copy.text, copy.files);
-      const match = mine.filter((m) => !m.used && m.key === k && m.at <= at + SKEW_MS && at - m.at < QUEUED_MS + SKEW_MS).sort((a, b) => b.at - a.at)[0];
+      // One that has not gone (queued, failed) has no copy.
+      const match = mine.filter((m) => !m.used && m.s.delivery !== "failed" && m.s.delivery !== "queued" && m.key === k && m.at <= at + SKEW_MS && at - m.at < QUEUED_MS + SKEW_MS).sort((a, b) => b.at - a.at)[0];
       if (!match) continue;
       match.used = true;
       sent.set(copy.seq, match.s);
     }
+    // One held or not sent stays at the end in the order typed, whatever its age, until it goes or is dismissed.
     const waiting = mine
-      .filter((m) => !m.used && now - m.at < QUEUED_MS)
+      .filter((m) => !m.used && (now - m.at < QUEUED_MS || m.s.delivery === "queued" || m.s.delivery === "failed"))
       .sort((a, b) => a.at - b.at)
-      .map(({ s }) => ({ kind: "you", at: s.at, text: saidWords(s), via: "mobile", queued: true, said: s }));
+      .map(({ s }) => ({ kind: "you", at: s.at, text: saidWords(s), via: "mobile", queued: true, failed: s.delivery === "failed", said: s }));
     // Past its queued spell with no copy in the feed: kept in place, as the thread under the chat once showed it, when it was never confirmed or has a reply.
     const stray = mine
-      .filter((m) => !m.used && now - m.at >= QUEUED_MS && (m.s.delivery === "unconfirmed" || m.s.replies?.some((r) => words(r.text))))
+      .filter((m) => !m.used && now - m.at >= QUEUED_MS && m.s.delivery !== "queued" && m.s.delivery !== "failed" && (m.s.delivery === "unconfirmed" || m.s.replies?.some((r) => words(r.text))))
       .map(({ s }) => ({ kind: "you", at: s.at, text: saidWords(s), via: "mobile", unconfirmed: s.delivery === "unconfirmed", said: s }));
     return { waiting, sent, stray };
   }
@@ -88,7 +90,7 @@
       // A reply keeps its feed id, which is what plays it.
       if (side === "them" && Number.isInteger(entry.seq)) bubble.seq = entry.seq;
       if (side === "me") {
-        bubble.state = entry.queued || entry.pending ? "queued" : entry.unconfirmed ? "unconfirmed" : "sent";
+        bubble.state = entry.failed ? "failed" : entry.queued || entry.pending ? "queued" : entry.unconfirmed ? "unconfirmed" : "sent";
         bubble.from = entry.via === "mobile" ? "mobile" : "desktop";
         if (entry.answer) bubble.answer = true;
         const said = entry.said || sent.get(entry.seq);

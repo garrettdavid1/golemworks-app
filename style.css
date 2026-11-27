@@ -376,6 +376,15 @@ h3.subgroup { margin: 10px 2px 0; font-size: 12px; font-weight: 700; text-transf
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
 }
 .toast-action { display: block; margin-top: 8px; }
+/* A send that did not go: inline, above the message box or inside the card, never over either. */
+.send-errors { flex: none; display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
+.send-errors:empty { display: none; }
+.send-error { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--blocked); border-radius: 12px; color: var(--blocked); font-size: 14px; }
+.send-error > span { flex: 1; min-width: 12ch; overflow-wrap: anywhere; }
+.bubble-held { margin-top: 4px; font-size: 13px; color: var(--muted); }
+.bubble-held.failed { color: var(--blocked); }
+.send-actions { display: flex; gap: 8px; margin-top: 6px; }
+.said-held { list-style: none; }
 .toast.error { border-color: var(--blocked); color: var(--blocked); }
 .toast.bare { bottom: max(16px, calc(env(safe-area-inset-bottom) + 16px - var(--frame-short, 0px))); }
 @media (prefers-reduced-motion: no-preference) {

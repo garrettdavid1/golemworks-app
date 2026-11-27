@@ -170,7 +170,7 @@
           waiting: list(s.waiting),
         };
         workshops.push(filled);
-        const own = list(s.asks).map((ask) => ({ ...ask, answeredAt: null, answer: null, snoozedUntil: snoozedUntil(ask?.snoozedUntil), waitedAt: stamp(ask?.waitedAt), online: w.online, stale: filled.stale, receivedAt: w.receivedAt, workshopId: w.id, workshop: w.name, overlord: s.overlord?.name || "Overlord", rank: w.rank }));
+        const own = list(s.asks).map((ask) => ({ ...ask, answeredAt: null, answer: null, snoozedUntil: snoozedUntil(ask?.snoozedUntil), waitedAt: stamp(ask?.waitedAt), online: w.online, away: w.away, stale: filled.stale, receivedAt: w.receivedAt, workshopId: w.id, workshop: w.name, overlord: s.overlord?.name || "Overlord", rank: w.rank }));
         asks.push(...own.sort((a, b) => String(b.at).localeCompare(String(a.at))));
       }
       return { ...view, workshops, asks };
